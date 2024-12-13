@@ -172,6 +172,7 @@ def step_read_ctrl(filename):
 
 def step_read_ocaf(filename):
     _shapes = []
+
     cafReader = STEPCAFControl_Reader()
     aDoc = TDocStd_Document("MDTV-XCAF")
 
@@ -780,6 +781,76 @@ def step2pcd_multi_batched(dirs_all: list):
 
     for c_thread in threads_all:
         c_thread.join()
+
+
+def assembly_filter(filename):
+    """
+    判断某个step模型是否为装配体
+    :return: is assembly
+    """
+    cafReader = STEPCAFControl_Reader()
+    aDoc = TDocStd_Document("MDTV-XCAF")
+
+    status = cafReader.ReadFile(filename)
+    if status == IFSelect_RetDone:
+        cafReader.Transfer(aDoc)
+    else:
+        raise ValueError('STET cannot be parsed:', filename)
+
+    rootLabel = aDoc.Main()
+    ShapeTool = XCAFDoc_DocumentTool.ShapeTool(rootLabel)
+
+    aSeq = TDF_LabelSequence()
+    ShapeTool.GetFreeShapes(aSeq)
+
+    compSeq = TDF_LabelSequence()
+    for i in range(aSeq.Length()):
+        ShapeTool.GetComponents(aSeq.Value(i + 1), compSeq)
+        num_of_objs = compSeq.Length()
+        if num_of_objs > 1:
+            return True
+        else:
+            return False
+
+
+def assemble_explode(filename):
+    """
+    将装配体的shape转化为一组零件shape
+    :return: list
+    """
+    cafReader = STEPCAFControl_Reader()
+    aDoc = TDocStd_Document("MDTV-XCAF")
+
+    status = cafReader.ReadFile(filename)
+    if status == IFSelect_RetDone:
+        cafReader.Transfer(aDoc)
+    else:
+        raise ValueError('STET cannot be parsed:', filename)
+
+    rootLabel = aDoc.Main()
+    ShapeTool = XCAFDoc_DocumentTool.ShapeTool(rootLabel)
+
+    aSeq = TDF_LabelSequence()
+    ShapeTool.GetFreeShapes(aSeq)
+
+    compSeq = TDF_LabelSequence()
+    part_list = []
+    for i in range(aSeq.Length()):
+        ShapeTool.GetComponents(aSeq.Value(i + 1), compSeq)
+
+        for j in range(compSeq.Length()):
+
+            label = compSeq.Value(j + 1)
+            loc = ShapeTool.GetLocation(label)
+            part = TopoDS_Shape()
+            ShapeTool.GetShape(label, part)
+
+            if not loc.IsIdentity():
+                part = part.Moved(loc)
+
+            part_list.append(part)
+
+    return part_list
 
 
 if __name__ == '__main__':
