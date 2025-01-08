@@ -48,6 +48,10 @@ def vis_shapeocc(shape_occ):
     start_display()
 
 
+def vis_step_file(file_name):
+    vis_shapeocc(step_proc.step_read_ocaf(file_name))
+
+
 def get_o3d_viewangle_json(json_file='tmp/camera_params.json'):
     with open(json_file, 'r') as f:
         camera_params = json.load(f)
@@ -188,6 +192,18 @@ def vis_mesh_view(mesh_path):
     vis.destroy_window()
 
 
+def vis_data2d(file_name, delimiter=','):
+    """
+    该文本文件的每行需要是 x,y
+    :param file_name:
+    :param delimiter:
+    :return:
+    """
+    points = np.loadtxt(file_name, delimiter=delimiter)
+
+    plt.clf()
+    plt.scatter(points[:, 0], points[:, 1], s=2)
+    plt.show()
 
 
 

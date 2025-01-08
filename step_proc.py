@@ -803,14 +803,23 @@ def assembly_filter(filename):
     aSeq = TDF_LabelSequence()
     ShapeTool.GetFreeShapes(aSeq)
 
-    compSeq = TDF_LabelSequence()
+    shapes_count = 0
     for i in range(aSeq.Length()):
-        ShapeTool.GetComponents(aSeq.Value(i + 1), compSeq)
-        num_of_objs = compSeq.Length()
-        if num_of_objs > 1:
-            return True
-        else:
-            return False
+        label = aSeq.Value(i + 1)
+        loc = ShapeTool.GetLocation(label)
+        part = TopoDS_Shape()
+        ShapeTool.GetShape(label, part)
+
+        if not loc.IsIdentity():
+            part = part.Moved(loc)
+
+        if part.ShapeType() == TopAbs_SOLID:
+            shapes_count += 1
+
+    if shapes_count > 1:
+        return True
+    else:
+        return False
 
 
 def assemble_explode(filename):
@@ -833,21 +842,18 @@ def assemble_explode(filename):
     aSeq = TDF_LabelSequence()
     ShapeTool.GetFreeShapes(aSeq)
 
-    compSeq = TDF_LabelSequence()
     part_list = []
+
     for i in range(aSeq.Length()):
-        ShapeTool.GetComponents(aSeq.Value(i + 1), compSeq)
+        label = aSeq.Value(i + 1)
+        loc = ShapeTool.GetLocation(label)
+        part = TopoDS_Shape()
+        ShapeTool.GetShape(label, part)
 
-        for j in range(compSeq.Length()):
+        if not loc.IsIdentity():
+            part = part.Moved(loc)
 
-            label = compSeq.Value(j + 1)
-            loc = ShapeTool.GetLocation(label)
-            part = TopoDS_Shape()
-            ShapeTool.GetShape(label, part)
-
-            if not loc.IsIdentity():
-                part = part.Moved(loc)
-
+        if part.ShapeType() == TopAbs_SOLID:
             part_list.append(part)
 
     return part_list
