@@ -13,7 +13,7 @@ if __name__ == '__main__':
 
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\图片处理')
 
-    img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig\suppl')
+    img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig')
 
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig\suppl')
 

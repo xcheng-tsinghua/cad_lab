@@ -6,12 +6,14 @@ import open3d as o3d
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+import random
 # self
 import step_proc
+import utils
 
 
-def vis_pcd(filepath, attr_show=None, show_normal=False):
-    data_all = np.loadtxt(filepath)
+def vis_pcd(filepath, attr_show=None, show_normal=False, delimiter=' '):
+    data_all = np.loadtxt(filepath, delimiter=delimiter)
 
     pcd = o3d.geometry.PointCloud()
     points = data_all[:, 0:3]
@@ -52,7 +54,7 @@ def vis_step_file(file_name):
     vis_shapeocc(step_proc.step_read_ocaf(file_name))
 
 
-def get_o3d_viewangle_json(json_file='tmp/camera_params.json'):
+def get_o3d_viewangle_json(json_file='tmp/camera_params.json', is_print_angle=False):
     with open(json_file, 'r') as f:
         camera_params = json.load(f)
 
@@ -70,14 +72,23 @@ def get_o3d_viewangle_json(json_file='tmp/camera_params.json'):
     up = rotation_matrix[:, 1]  # 取第二列
     up = up / np.linalg.norm(up)  # 归一化
 
-    print('front: ', front)
-    print('up: ', -up)
+    if is_print_angle:
+        print('front: ', front)
+        print('up: ', -up)
 
     return front, -up
 
 
-def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t'):
-
+def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t', is_save_view=False):
+    """
+    显示点云，点云每行为xyzijk，分隔符为delimiter
+    :param pcd_path:
+    :param attr:
+    :param show_normal:
+    :param delimiter:
+    :param is_save_view: 是否在关闭本函数后板寸视角，下次自动调取
+    :return:
+    """
     data_all = np.loadtxt(pcd_path, delimiter=delimiter)
     pcd = o3d.geometry.PointCloud()
     points = data_all[:, 0:3]
@@ -155,14 +166,21 @@ def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t'):
     vis.update_renderer()
     vis.run()
 
-    # 保存相机参数到json文件
-    camera_params = view_control.convert_to_pinhole_camera_parameters()
-    o3d.io.write_pinhole_camera_parameters("tmp/camera_params.json", camera_params)
+    if is_save_view:
+        # 保存相机参数到json文件
+        camera_params = view_control.convert_to_pinhole_camera_parameters()
+        o3d.io.write_pinhole_camera_parameters("tmp/camera_params.json", camera_params)
 
     vis.destroy_window()
 
 
-def vis_mesh_view(mesh_path):
+def vis_mesh_view(mesh_path, is_save_view=False):
+    """
+    显示Mesh模型，例如obj，stl
+    :param mesh_path:
+    :param is_save_view: 是否在关闭本函数后板寸视角，下次自动调取
+    :return:
+    """
     mesh = o3d.io.read_triangle_mesh(mesh_path)
     mesh.compute_vertex_normals()
     mesh.paint_uniform_color([0., 1., 1.])
@@ -185,11 +203,32 @@ def vis_mesh_view(mesh_path):
     vis.update_renderer()
     vis.run()
 
-    # 保存相机参数到json文件
-    # camera_params = view_control.convert_to_pinhole_camera_parameters()
-    # o3d.io.write_pinhole_camera_parameters("camera_params.json", camera_params)
+    if is_save_view:
+        # 保存相机参数到json文件
+        camera_params = view_control.convert_to_pinhole_camera_parameters()
+        o3d.io.write_pinhole_camera_parameters("tmp/camera_params_ms.json", camera_params)
 
     vis.destroy_window()
+
+
+def vis_mesh_view_each_class(root_dir, suffix='obj', show_count=1):
+    """
+    显示根目录下每个文件夹（类别）内的三角面模型
+    :param root_dir:
+    :param suffix: 三角面文件后缀
+    :param show_count: 每个类别的随机显示数目
+    :return:
+    """
+    classes = utils.get_subdirs(root_dir)
+
+    for c_class in classes:
+        print('current show class:', c_class)
+        c_class_dir = os.path.join(root_dir, c_class)
+        c_files = utils.get_allfiles(c_class_dir, suffix)
+
+        show_files = random.choices(c_files, k=show_count)
+        for c_show in show_files:
+            vis_mesh_view(c_show)
 
 
 def vis_data2d(file_name, delimiter=','):
@@ -206,7 +245,13 @@ def vis_data2d(file_name, delimiter=','):
     plt.show()
 
 
+if __name__ == '__main__':
+    # vis_pcd(r'D:\document\DeepLearning\DataSet\MCB_PointCloud\MCB_B\train\fitting\00038890.txt')
+    # vis_mesh_view(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\train\bearing')
 
+    vis_mesh_view_each_class(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\test')
+
+    pass
 
 
 
