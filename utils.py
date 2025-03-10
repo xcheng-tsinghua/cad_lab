@@ -6,7 +6,17 @@ from pathlib import Path
 import open3d as o3d
 import pymeshlab
 import py7zr
-import step_proc
+# import step_proc
+
+
+def is_suffix_step(filename):
+    if filename[-4:] == '.stp' \
+            or filename[-5:] == '.step' \
+            or filename[-5:] == '.STEP':
+        return True
+
+    else:
+        return False
 
 
 def rename_files_in_dir(dir_path, start_ind=0):
@@ -88,7 +98,7 @@ def get_allfiles(dir_path, suffix='txt', filename_only=False):
             return False
 
     if suffix == 'stp' or suffix == 'step' or suffix == 'STEP':
-        suffix_judge = step_proc.is_suffix_step
+        suffix_judge = is_suffix_step
     else:
         suffix_judge = other_judge
 

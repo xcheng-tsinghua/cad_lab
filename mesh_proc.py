@@ -2,6 +2,9 @@ import os
 import open3d as o3d
 import pymeshlab
 import numpy as np
+import shutil
+
+from utils import get_allfiles, get_subdirs
 
 
 def get_points_o3d(mesh_file, n_points, save_path):
@@ -50,9 +53,36 @@ def get_points_mslab(mesh_file, n_points, save_path=None):
     if save_path is not None:
         save_path = os.path.abspath(save_path)
         # 保存点云数据和法向量
-        np.savetxt(save_path, data, fmt='%.6f', delimiter='\t')
+        np.savetxt(save_path, data, fmt='%.6f', delimiter=' ')
 
     return data
+
+
+def batched_mesh_to_pcd(source_dir=r'D:\document\DeepLearning\DataSet\MCB\MCB_A\train', target_dir=r'D:\document\DeepLearning\paper_draw\AttrVis_MCB2', k=5):
+    classes = get_subdirs(source_dir)
+
+    for idx, c_class in enumerate(classes):
+        print(c_class, f'{idx}/{len(classes)}')
+        c_class_dir = os.path.join(source_dir, c_class)
+        all_meshes = get_allfiles(c_class_dir, 'obj')
+
+        for i in range(k):
+            c_mesh = all_meshes[i]
+
+            base_mesh = os.path.basename(c_mesh)
+
+            tar_mesh = os.path.join(target_dir, base_mesh)
+            tar_pcd = tar_mesh.replace('.obj', '.txt')
+
+            shutil.copy(c_mesh, tar_mesh)
+            get_points_mslab(tar_mesh, 3000, tar_pcd)
+
+
+if __name__ == '__main__':
+    batched_mesh_to_pcd()
+    pass
+
+
 
 
 

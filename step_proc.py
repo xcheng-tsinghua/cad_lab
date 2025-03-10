@@ -43,6 +43,7 @@ import itertools
 # self
 import mesh_proc
 import utils
+from utils import is_suffix_step
 
 
 class Point3DForDataSet(gp_Pnt):
@@ -307,14 +308,14 @@ def is_point_in_shape(point: gp_Pnt, shape: TopoDS_Shape, tol: float = precision
         return False
 
 
-def is_suffix_step(filename):
-    if filename[-4:] == '.stp' \
-            or filename[-5:] == '.step' \
-            or filename[-5:] == '.STEP':
-        return True
-
-    else:
-        return False
+# def is_suffix_step(filename):
+#     if filename[-4:] == '.stp' \
+#             or filename[-5:] == '.step' \
+#             or filename[-5:] == '.STEP':
+#         return True
+#
+#     else:
+#         return False
 
 
 def dist_point2shape(point: gp_Pnt, shape: TopoDS_Shape):
