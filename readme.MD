@@ -1,14 +1,11 @@
 
 ## pythonocc-core 环境搭建
 ### 1. 创建 conda 环境  
-`conda create -n occt python=3.9`  
-`conda activate occt`
+`conda create -n pyocc python=3.10`  
+`conda activate pyocc`
 
-### 2. 安装 pythonocc-core  
-windows:  
-`conda install pythonocc-core`  
-linux:  
-`conda install -c conda-forge pythonocc-core=7.7.0`  
+### 2. 安装 pythonocc-core
+`conda install -c conda-forge pythonocc-core=7.8.1.1`  
 
 无法安装`pythonocc-core`需要添加下载源：  
 `conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/`  
@@ -25,9 +22,10 @@ linux:
 `pip install matplotlib`
 
 ## 使用方法
-脚本为：batched_step2pcd.py
+STEP处理脚本：step_proc.py
+Mesh处理脚本：mesh_proc.py
+点云、STEP、Mesh可视化脚本：vis.py
 
-python batched_step2pcd.py --root_dir=D://adir/...
 
 ## 更新日志
 ### 2024.6.23 优化边缘处理方法，相切过渡面不会被视为边缘

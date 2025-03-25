@@ -360,7 +360,7 @@ def get_edges_useful(shape_occ: TopoDS_Shape):
             edge_local = topods.Edge(edge_local)
             edge_exp.Next()
 
-            if TopTools_ShapeMapHasher.IsEqual(fp_edge, edge_local):
+            if fp_edge.IsSame(edge_local):
                 return True
 
         return False
@@ -861,6 +861,7 @@ def assemble_explode(filename):
 
 
 if __name__ == '__main__':
+    step2pcd(r'C:\Users\ChengXi\Desktop\sketches\gear.STEP', 2500, r'C:\Users\ChengXi\Desktop\sketches\gear.txt', xyz_only=False)
     pass
 
 

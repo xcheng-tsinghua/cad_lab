@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="occt" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="occt" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="pyocc" project-jdk-type="Python SDK" />
 </project>

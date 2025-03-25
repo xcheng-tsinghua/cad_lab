@@ -12,7 +12,7 @@ import step_proc
 import utils
 
 
-def vis_pcd(filepath, attr_show=None, show_normal=False, delimiter=' '):
+def vis_pcd(filepath, attr_show=None, show_normal=False, delimiter='\t'):
     data_all = np.loadtxt(filepath, delimiter=delimiter)
 
     pcd = o3d.geometry.PointCloud()
@@ -246,11 +246,13 @@ def vis_data2d(file_name, delimiter=','):
 
 
 if __name__ == '__main__':
-    # vis_pcd(r'D:\document\DeepLearning\DataSet\MCB_PointCloud\MCB_B\train\fitting\00038890.txt')
+    vis_pcd(r'C:\Users\ChengXi\Desktop\sketches\gear.txt', show_normal=True)
     # vis_mesh_view(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\train\bearing')
 
-    vis_mesh_view_each_class(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\test')
+    # vis_mesh_view_each_class(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\test')
 
+    # vis_step_cloud(r'C:\Users\ChengXi\Desktop\sketches\gear.STEP')
+    # vis_shapeocc(r'C:\Users\ChengXi\Desktop\sketches\gear.STEP')
     pass
 
 
