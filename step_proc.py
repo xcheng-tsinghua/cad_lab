@@ -267,13 +267,6 @@ def shapeocc2stl(shape_occ, save_path, deflection=0.1):
     stl_writer.Write(shape_occ, save_path)
 
 
-def is_edge_overlap(edge1: TopoDS_Edge, edge2: TopoDS_Edge) -> bool:
-    '''
-    检查起点、终点、中间一个随机点
-    '''
-    return TopTools_ShapeMapHasher.IsEqual(edge1, edge2)
-
-
 def is_edge_valid(fp_edge: TopoDS_Edge):
     """
     判断边是否有效，无效边不能参与计算
