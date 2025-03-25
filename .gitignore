@@ -3,4 +3,4 @@
 ./log/
 ./draw_paramnet.py
 ./test.py
-
+./__pycache__/
