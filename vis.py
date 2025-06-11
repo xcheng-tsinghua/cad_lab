@@ -38,7 +38,8 @@ def vis_step_cloud(file_name, n_points=2500, with_cst=False, attr_show=None, def
     将STEP文件转化为点云之后进行可视化
     '''
     step_proc.step2pcd(file_name, n_points, tmp_pc, deflection, not with_cst)
-    vis_pcd(tmp_pc, attr_show)
+    # vis_pcd(tmp_pc, attr_show)
+    vis_pcd_view(tmp_pc, attr_show, is_save_view=True)
 
     os.remove(tmp_pc)
 
@@ -139,13 +140,13 @@ def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t', is_save
 
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
-    else:
-        colors = []
-
-        for _ in points[:, 0]:
-            colors.append((189 / 255, 216 / 255, 232 / 255))
-
-        pcd.colors = o3d.utility.Vector3dVector(colors)
+    # else:
+    #     colors = []
+    #
+    #     for _ in points[:, 0]:
+    #         colors.append((189 / 255, 216 / 255, 232 / 255))
+    #
+    #     pcd.colors = o3d.utility.Vector3dVector(colors)
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -157,7 +158,7 @@ def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t', is_save
     view_control.set_up(v_up)
 
     view_control.set_lookat([0, 0, 0])
-    view_control.set_zoom(0.7)
+    view_control.set_zoom(1.7)
 
     vis.update_geometry(pcd)
     opt = vis.get_render_option()
@@ -246,12 +247,14 @@ def vis_data2d(file_name, delimiter=','):
 
 
 if __name__ == '__main__':
-    vis_pcd(r'C:\Users\ChengXi\Desktop\sketches\gear.txt', show_normal=True)
+    # vis_pcd(r'C:\Users\ChengXi\Desktop\sketches\gear.txt', show_normal=True)
     # vis_mesh_view(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\train\bearing')
+
+    # vis_step_file(r'C:\Users\ChengXi\Desktop\螺母.STEP')
 
     # vis_mesh_view_each_class(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\test')
 
-    # vis_step_cloud(r'C:\Users\ChengXi\Desktop\sketches\gear.STEP')
+    vis_step_cloud(r'C:\Users\ChengXi\Desktop\20171201-095533-37961.STEP', 15000, False)
     # vis_shapeocc(r'C:\Users\ChengXi\Desktop\sketches\gear.STEP')
     pass
 

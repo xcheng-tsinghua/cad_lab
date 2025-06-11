@@ -1,6 +1,7 @@
 # pack
 from PIL import Image
 from tqdm import tqdm
+from multiprocessing import Pool
 # self
 import utils
 
@@ -33,16 +34,25 @@ def remove_png_white_pixel(png_file):
     cropped_img.save(png_file, "PNG")
 
 
-def remove_png_white_pixel_batched(dir_path):
+def remove_png_white_pixel_batched(dir_path, workers=4):
     # 获取全部图片路径
     pictures_all = utils.get_allfiles(dir_path, 'png', False)
 
-    for c_pic in tqdm(pictures_all, total=len(pictures_all)):
-        # 删除周围黑色像素
-        # remove_round_black(c_pic, pix_width)
+    with Pool(processes=workers) as pool:
+        _ = list(
+            tqdm(
+                pool.imap(remove_png_white_pixel, pictures_all),
+                total=len(pictures_all),
+                desc='processing png'
+            )
+        )
 
-        # 删除白色像素
-        remove_png_white_pixel(c_pic)
+    # for c_pic in tqdm(pictures_all, total=len(pictures_all)):
+    #     # 删除周围黑色像素
+    #     # remove_round_black(c_pic, pix_width)
+    #
+    #     # 删除白色像素
+    #     remove_png_white_pixel(c_pic)
 
 
 

@@ -22,7 +22,6 @@ from OCC.Core.TDF import TDF_LabelSequence
 from OCC.Core.BRep import BRep_Builder
 from OCC.Core.TopoDS import TopoDS_Compound
 from OCC.Core.TopTools import TopTools_IndexedMapOfShape
-from OCC.Core.TopTools import TopTools_ShapeMapHasher
 from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCC.Core.GeomLProp import GeomLProp_SLProps
 from OCC.Core.BRepTools import breptools
@@ -39,6 +38,7 @@ import logging
 from datetime import datetime
 import multiprocessing
 import itertools
+from collections import Counter
 
 # self
 import mesh_proc
@@ -284,7 +284,7 @@ def is_edge_useful(edge: TopoDS_Edge, edges_useful: TopTools_IndexedMapOfShape):
     """
     判断边是有有用，即判断该边是否在有用边列表里
     """
-    assert edges_useful.Size() != 0
+    # assert edges_useful.Size() != 0
 
     if edges_useful.Contains(edge):
         return True
@@ -853,8 +853,54 @@ def assemble_explode(filename):
     return part_list
 
 
+def step_primitive_type_statistic(step_root):
+    """
+    统计一个step零件里的各类基元数
+    :param step_root:
+    :return:
+    """
+    shape_occ = step_read_ocaf(step_root)
+    statis_res = {}
+
+    face_explorer = TopExp_Explorer(shape_occ, TopAbs_FACE)
+    while face_explorer.More():
+        face = face_explorer.Current()
+        face = topods.Face(face)
+        face_explorer.Next()
+
+        surface = BRep_Tool.Surface(face)
+        surface_type = surface.DynamicType()
+        type_name = surface_type.Name()
+
+        if type_name in statis_res.keys():
+            statis_res[type_name] += 1
+        else:
+            statis_res[type_name] = 1
+
+    return statis_res
+
+
+def step_primitive_type_statistic_batched(root):
+    step_all = utils.get_allfiles(root, 'STEP')
+    statis_all = Counter()
+
+    for c_step in tqdm(step_all, total=len(step_all)):
+        try:
+            c_statis = step_primitive_type_statistic(c_step)
+            statis_all = statis_all + Counter(c_statis)
+        except:
+            print(f'error occurred: {c_step}')
+
+    print(statis_all)
+
+
 if __name__ == '__main__':
-    step2pcd(r'C:\Users\ChengXi\Desktop\sketches\gear.STEP', 2500, r'C:\Users\ChengXi\Desktop\sketches\gear.txt', xyz_only=False)
+    # step2pcd(r'C:\Users\ChengXi\Desktop\cylinder.STEP', 2500, r'C:\Users\ChengXi\Desktop\cylinder.txt', xyz_only=True)
+    step_primitive_type_statistic_batched(r'D:\document\DeepLearning\DataSet\STEPMillion\STEPMillion_0\raw')
+
+
+
+
     pass
 
 

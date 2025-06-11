@@ -19,6 +19,18 @@ git status && git add . && git commit -m "change" && git push origin main
 # 远程同步到本地
 git pull origin main
 
+Counter({
+'Geom_Plane': 1745610,
+'Geom_CylindricalSurface': 439119,
+'Geom_BSplineSurface': 294139,
+'Geom_RectangularTrimmedSurface': 271824,
+'Geom_ToroidalSurface': 64732,
+'Geom_ConicalSurface': 43831,
+'Geom_SurfaceOfLinearExtrusion': 43086,
+'Geom_SphericalSurface': 23826,
+'Geom_SurfaceOfRevolution': 20460,
+'Geom_OffsetSurface': 2490
+})
 
 
 
