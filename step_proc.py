@@ -11,9 +11,10 @@ from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
 from OCC.Core.BRepExtrema import BRepExtrema_DistShapeShape
 from OCC.Core.TopoDS import topods
 from OCC.Core.Precision import precision
-from OCC.Core.GProp import GProp_PGProps
+from OCC.Core.GProp import GProp_PGProps, GProp_GProps
 from OCC.Core.BRepGProp import brepgprop
 from OCC.Core.BRep import BRep_Tool
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Common
 from OCC.Core.Geom import Geom_ConicalSurface, Geom_Plane, Geom_CylindricalSurface, Geom_Curve
 from OCC.Core.TDocStd import TDocStd_Document
 from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
@@ -894,9 +895,103 @@ def step_primitive_type_statistic_batched(root):
     print(statis_all)
 
 
+def read_step_assembly(file_path):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"文件不存在: {file_path}")
+
+    reader = STEPControl_Reader()
+    status = reader.ReadFile(file_path)
+    if status != IFSelect_RetDone:
+        raise RuntimeError("STEP 文件读取失败")
+
+    reader.TransferRoots()
+    shape = reader.Shape()
+
+    solids = []
+    exp = TopExp_Explorer(shape, TopAbs_SOLID)
+    while exp.More():
+        solids.append(exp.Current())
+        exp.Next()
+
+    print(f"共读取 {len(solids)} 个零件")
+    return solids
+
+
 if __name__ == '__main__':
+    # step_assem = r'C:\Users\ChengXi\Desktop\螺纹连接.STEP'
+    # solids = read_step_assembly(step_assem)
+
+    # from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Common
+    # from OCC.Display.SimpleGui import init_display
+    # from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox
+    # # 创建两个立方体作为示例
+    # shape1 = BRepPrimAPI_MakeBox(100, 100, 100).Shape()
+    # shape2 = BRepPrimAPI_MakeBox(100, 100, 100).Shape()
+    #
+    # # 平移第二个立方体使它与第一个部分重叠
+    # from OCC.Core.gp import gp_Trsf, gp_Vec
+    # from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_Transform
+    #
+    # trsf = gp_Trsf()
+    # trsf.SetTranslation(gp_Vec(50, 50, 50))
+    # shape2_moved = BRepBuilderAPI_Transform(shape2, trsf, True).Shape()
+    #
+    # detect_interference_full([shape1, shape2])
+
+
+
     # step2pcd(r'C:\Users\ChengXi\Desktop\cylinder.STEP', 2500, r'C:\Users\ChengXi\Desktop\cylinder.txt', xyz_only=True)
-    step_primitive_type_statistic_batched(r'D:\document\DeepLearning\DataSet\STEPMillion\STEPMillion_0\raw')
+    # step_primitive_type_statistic_batched(r'D:\document\DeepLearning\DataSet\STEPMillion\STEPMillion_0\raw')
+
+    """
+    <level1>
+Start by creating a new coordinate system with Euler angles set to zero and a translation vector also set to zero. Next, draw a two-dimensional sketch on the first face. This sketch consists of a single loop made up of four lines. The first line starts at the origin (0.0, 0.0) and ends at (0.6, 0.0). The second line starts at (0.6, 0.0) and ends at (0.6, 0.375). The third line starts at (0.6, 0.375) and ends at (0.0, 0.375). Finally, the fourth line completes the loop by starting at (0.0, 0.375) and ending at the origin (0.0, 0.0). After drawing the sketch, apply a scale factor of 0.6 to the entire sketch. Ensure that the sketch remains aligned with the original coordinate system by rotating it using Euler angles set to zero and translating it using a vector set to zero. To transform the scaled two-dimensional sketch into a three-dimensional model, extrude the sketch 0.075 units along the normal direction. Do not extrude in the opposite direction of the normal. This operation will create a new solid body. The final dimensions of the rectangular block are a length of 0.5999999999999999 units, a width of 0.3749999999999999 units, and a height of 0.07499999999999998 units.
+</level1>
+
+<level2>
+Create a rectangular block by starting with a two-dimensional sketch on a face. The sketch forms a rectangle with a length slightly less than 0.6 units and a width slightly less than 0.375 units. After drawing the sketch, scale it down to fit the desired dimensions. The scaled sketch is then transformed into a three-dimensional model by extruding it along the normal direction to a height slightly less than 0.075 units. The resulting solid body has a length, width, and height that closely match the specified dimensions, forming a compact rectangular block.
+</level2>
+
+<level3>
+The design involves creating a small rectangular block. The block has a length and width that are roughly 0.6 and 0.375 units, respectively, and a height of about 0.075 units. The final shape is a simple, compact rectangular solid.
+</level3>
+
+
+
+###############################################################################
+    <part_1>
+### Construct a Rectangular Block
+#### Create a New Coordinate System
+- Set the Euler angles to 0.0, 0.0, 0.0.
+- Set the translation vector to 0.0, 0.0, 0.0.
+
+#### Draw a 2D Sketch
+- **Face 1**
+  - **Loop 1**
+    - **Line 1**: Start at (0.0, 0.0) and end at (0.6, 0.0).
+    - **Line 2**: Start at (0.6, 0.0) and end at (0.6, 0.375).
+    - **Line 3**: Start at (0.6, 0.375) and end at (0.0, 0.375).
+    - **Line 4**: Start at (0.0, 0.375) and end at (0.0, 0.0).
+
+#### Scale the 2D Sketch
+- Apply a scale factor of 0.6 to the sketch.
+
+#### Transform the Scaled 2D Sketch into 3D
+- Rotate the sketch using the Euler angles (0.0, 0.0, 0.0).
+- Translate the sketch using the translation vector (0.0, 0.0, 0.0).
+
+#### Extrude the 2D Sketch to Generate the 3D Model
+- Extrude the sketch 0.075 units towards the normal.
+- Do not extrude in the opposite direction of the normal.
+- The operation creates a new solid body.
+
+#### Final Dimensions
+- Length: 0.5999999999999999
+- Width: 0.3749999999999999
+- Height: 0.07499999999999998
+</part_1>
+    
+    """
 
 
 

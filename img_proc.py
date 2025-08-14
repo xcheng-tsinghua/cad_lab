@@ -2,11 +2,13 @@
 from PIL import Image
 from tqdm import tqdm
 from multiprocessing import Pool
+from functools import partial
+
 # self
 import utils
 
 
-def remove_png_white_pixel(png_file):
+def remove_png_white_pixel(png_file, remove_pixel=(255, 255, 255)):
     # 打开图片
     img = Image.open(png_file).convert("RGBA")
 
@@ -17,7 +19,7 @@ def remove_png_white_pixel(png_file):
     new_pixels = []
     for pixel in pixels:
         # 检查像素是否为白色
-        if pixel[:3] == (255, 255, 255):
+        if pixel[:3] == remove_pixel:
             # 如果是白色，则将其设置为透明
             new_pixels.append((255, 255, 255, 0))
         else:
@@ -34,14 +36,16 @@ def remove_png_white_pixel(png_file):
     cropped_img.save(png_file, "PNG")
 
 
-def remove_png_white_pixel_batched(dir_path, workers=4):
+def remove_png_white_pixel_batched(dir_path, remove_pixel=(255, 255, 255), workers=4):
     # 获取全部图片路径
     pictures_all = utils.get_allfiles(dir_path, 'png', False)
+
+    work_func = partial(remove_png_white_pixel, remove_pixel=remove_pixel)
 
     with Pool(processes=workers) as pool:
         _ = list(
             tqdm(
-                pool.imap(remove_png_white_pixel, pictures_all),
+                pool.imap(work_func, pictures_all),
                 total=len(pictures_all),
                 desc='processing png'
             )

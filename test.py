@@ -3,6 +3,17 @@ import step_proc
 import img_proc
 
 
+def remove_u00a0(txt_file):
+    with open(txt_file, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    # 替换不可见的NBSP等空格为正常空格或删除
+    cleaned = content.replace('\u00A0', '').replace('聽', '')  # '\u00A0' 是 NBSP
+
+    with open(txt_file, "w", encoding="utf-8") as f:
+        f.write(cleaned)
+
+
 if __name__ == '__main__':
     # file_name = ['D:\\document\\DeepLearning\\tmp\\STEPMillion_pack1\\00000000\\00000000_290a9120f9f249a7a05cfe9c_step_000.step', 'D:\\document\\DeepLearning\\tmp\\STEPMillion_pack1\\00000001\\00000001_1ffb81a71e5b402e966b9341_step_000.step', 'D:\\document\\DeepLearning\\tmp\\STEPMillion_pack1\\00000002\\00000002_1ffb81a71e5b402e966b9341_step_001.step']
     #
@@ -12,7 +23,8 @@ if __name__ == '__main__':
     # vis.vis_step_file(r'D:\document\DeepLearning\tmp\STEPMillion_pack1\00000038\00000038_c7d977f326364e35bb5b5d27_step_001.step')
 
     # img_proc.remove_png_white_pixel(r'E:\document\deeplearning_idea\参数化点云\参数化点云小论文\网站\cstnetwork.io\static\images\data_percentage.png')
-    img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig')
+    img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255,255,255), 4)
+    # remove_u00a0(r'C:\Users\ChengXi\Desktop\60SJ.txt')
 
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\program')
 
@@ -43,4 +55,9 @@ if __name__ == '__main__':
     # print(f'cone_count: {cone_all / all_ins}')
     # print(f'other_count: {other_all / all_ins}')
 
+
+    # aval = 90.9104 + 99.8862 +77.5054 +79.5839 +155.2465 +89.0285
+    # bval = 45.2805+63.3458+49.0998+35.3037+45.4258+49.8011
+    #
+    # print(1 - bval / aval)
 
