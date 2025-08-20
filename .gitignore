@@ -4,4 +4,4 @@ log/
 __pycache__/
 processor/__pycache__/
 utils/__pycache__/
-
+.idea/
