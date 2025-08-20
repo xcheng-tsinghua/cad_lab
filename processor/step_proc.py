@@ -43,8 +43,7 @@ from collections import Counter
 
 # self
 import mesh_proc
-import utils
-from utils import is_suffix_step
+from utils import utils
 
 
 class Point3DForDataSet(gp_Pnt):
@@ -300,16 +299,6 @@ def is_point_in_shape(point: gp_Pnt, shape: TopoDS_Shape, tol: float = precision
         return True
     else:
         return False
-
-
-# def is_suffix_step(filename):
-#     if filename[-4:] == '.stp' \
-#             or filename[-5:] == '.step' \
-#             or filename[-5:] == '.STEP':
-#         return True
-#
-#     else:
-#         return False
 
 
 def dist_point2shape(point: gp_Pnt, shape: TopoDS_Shape):
@@ -654,7 +643,7 @@ def step2pcd_batched(dir_path, n_points=2650, is_load_progress=True, xyz_only=Fa
             for file in files:
                 current_filepath = str(os.path.join(root, file))
 
-                if is_suffix_step(current_filepath):
+                if utils.is_suffix_step(current_filepath):
                     file_name_pcd = str(trans_count) + '.txt'
                     trans_count += 1
 

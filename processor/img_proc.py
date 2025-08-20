@@ -5,7 +5,7 @@ from multiprocessing import Pool
 from functools import partial
 
 # self
-import utils
+from utils import utils
 
 
 def remove_png_white_pixel(png_file, remove_pixel=(255, 255, 255)):

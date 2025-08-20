@@ -4,7 +4,7 @@ import pymeshlab
 import numpy as np
 import shutil
 
-from utils import get_allfiles, get_subdirs
+from utils import utils
 
 
 def get_points_o3d(mesh_file, n_points, save_path):
@@ -59,12 +59,12 @@ def get_points_mslab(mesh_file, n_points, save_path=None):
 
 
 def batched_mesh_to_pcd(source_dir=r'D:\document\DeepLearning\DataSet\MCB\MCB_A\train', target_dir=r'D:\document\DeepLearning\paper_draw\AttrVis_MCB2', k=5):
-    classes = get_subdirs(source_dir)
+    classes = utils.get_subdirs(source_dir)
 
     for idx, c_class in enumerate(classes):
         print(c_class, f'{idx}/{len(classes)}')
         c_class_dir = os.path.join(source_dir, c_class)
-        all_meshes = get_allfiles(c_class_dir, 'obj')
+        all_meshes = utils.get_allfiles(c_class_dir, 'obj')
 
         for i in range(k):
             c_mesh = all_meshes[i]

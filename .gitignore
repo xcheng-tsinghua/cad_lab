@@ -4,5 +4,4 @@ log/
 __pycache__/
 processor/__pycache__/
 utils/__pycache__/
-draw_paramnet.py
-test.py
+
