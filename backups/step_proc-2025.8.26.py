@@ -26,7 +26,6 @@ from OCC.Core.TopTools import TopTools_IndexedMapOfShape
 from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCC.Core.GeomLProp import GeomLProp_SLProps
 from OCC.Core.BRepTools import breptools
-
 # others
 import os
 import open3d as o3d
@@ -51,132 +50,110 @@ class Point3DForDataSet(gp_Pnt):
     """
     使用类处理点的额外属性
     """
-    def __init__(self, pnt_loc: gp_Pnt, aligned_face: TopoDS_Face):
+    def __init__(self, pnt_loc: gp_Pnt, aligned_face: TopoDS_Face, aligned_shape_area, edges_useful):
         super().__init__(pnt_loc.XYZ())
+
+        self.edges_useful = edges_useful
+
         self.aligned_face = aligned_face
+        self.aligned_shape_area = aligned_shape_area
 
         self.pmt = -1
-        self.dir = gp_Vec(0.0, 0.0, -1.0)
-        self.dim = -1.
-        self.nor = gp_Vec(0.0, 0.0, -1.0)
-        self.loc = gp_Pnt(0.0, 0.0, 0.0)
+        self.mad = gp_Vec(0.0, 0.0, -1.0)
+        self.is_edge_nearby = 0
+        self.edge_nearby_threshold = 0.0
 
-        self.pmt_dir_cal()
-        self.dim_loc_cal()
-        self.nor_cal()
+        self.pmt_mad_cal()
+        self.edge_nearby_cal()
 
-    def pmt_dir_cal(self):
-        """
-        计算所在基元类型及主要方向
-        :return:
-        """
+    def pmt_mad_cal(self):
+        # 计算所在基元类型及主要方向
         aligned_surface = BRep_Tool.Surface(self.aligned_face)
         type_name = face_type(self.aligned_face)
 
-        if type_name == 'plane':
-            self.pmt = 0
-            self.dir = Geom_Plane.DownCast(aligned_surface).Axis().Direction().XYZ()
+        if type_name == 'cone':
+            self.pmt = 1
+            self.mad = Geom_ConicalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.mad_rectify()  # 校正方向，使方向唯一
 
         elif type_name == 'cylinder':
-            self.pmt = 1
-            self.dir = Geom_CylindricalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
-
-        elif type_name == 'cone':
             self.pmt = 2
-            self.dir = Geom_ConicalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.mad = Geom_CylindricalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.mad_rectify()  # 校正方向，使方向唯一
 
-        elif type_name == 'sphere':
+        elif type_name == 'plane':
             self.pmt = 3
+            self.mad = Geom_Plane.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.mad_rectify()  # 校正方向，使方向唯一
 
-        elif type_name == 'freeform':
-            self.pmt = 4
+        # elif type_name == 'Geom_SphericalSurface':
+        #     self.pmt = 4
+        #     self.mad = gp_Vec(0.0, 0.0, -1.0)
 
         else:
-            raise TypeError('Undefined surf type')
+            # 其它不好定义的类型，欧拉角统一定义为 (0, 0, -1), 这批弄完后统一改
+            self.pmt = 0
 
-        # 保证主方向唯一
-        ax_x = self.dir.X()
-        ax_y = self.dir.Y()
-        ax_z = self.dir.Z()
+    def mad_rectify(self):
+        """
+        保证欧拉角方向唯一
+        """
+        ax_x = self.mad.X()
+        ax_y = self.mad.Y()
+        ax_z = self.mad.Z()
 
         zero_lim = precision.Confusion()
         if ax_z < -zero_lim:  # z < 0
-            self.dir *= -1.0
+            self.mad *= -1.0
         elif abs(ax_z) <= zero_lim and ax_y < -zero_lim:  # z为零, y为负数
-            self.dir *= -1.0
+            self.mad *= -1.0
         elif abs(ax_z) <= zero_lim and abs(ax_y) <= zero_lim and ax_x < -zero_lim:  # z为零, y为零, x为负数
-            self.dir *= -1.0
+            self.mad *= -1.0
         else:
             raise ValueError('error main axis direction length')
 
-    def dim_loc_cal(self):
-        """
-        计算主尺寸和主位置
-        :return:
-        """
-        aligned_surface = BRep_Tool.Surface(self.aligned_face)
-        type_name = face_type(self.aligned_face)
+    # 计算边缘邻近阈值
+    def nearby_threshold_cal(self):
+        rsphere = np.sqrt(self.aligned_shape_area / (4.0 * np.pi))
+        # near_rate = 0.08
+        near_rate = 0.03
+        self.edge_nearby_threshold = near_rate * rsphere
 
-        if type_name == 'plane':  # 平面无主尺寸
-            pln = Geom_Plane.DownCast(aligned_surface).Plane()
-            a, b, c, d = pln.Coefficients()
-
-            ad = a * d
-            bd = b * d
-            cd = c * d
-            length = (a * a + b * b + c * c) ** 0.5
-
-            self.loc = gp_Pnt(- ad / length, - bd / length, - cd / length)
-
-        elif type_name == 'cylinder':
-            cy_surf = Geom_CylindricalSurface.DownCast(aligned_surface).Cylinder()
-            self.dim = cy_surf.Radius()
-
-            axis = cy_surf.Axis()
-            cyloc = axis.Location()  # 轴线上一点 (gp_Pnt)
-            cydir = axis.Direction()  # 轴线方向 (gp_Dir)
-
-            # 投影长度 (点积)
-            t = - cyloc.Dot(cydir) / cydir.Magnitude() ** 2
-
-            # 垂足坐标
-            self.loc = cyloc + t * cydir
-
-        elif type_name == 'cone':
-            cone_surf = Geom_ConicalSurface.DownCast(aligned_surface).Cone()
-            self.dim = cone_surf.SemiAngle()
-            self.loc = cone_surf.Apex()
-
-        elif type_name == 'sphere':
-            sph_surf = Geom_SphericalSurface.DownCast(aligned_surface).Sphere()
-            self.dim = sph_surf.Radius()
-            self.loc = sph_surf.Location()
-
-        elif type_name == 'freeform':  # 自由面无主尺寸和主位置
-            pass
-
+    def is_target_edge_nearby(self, fp_edge: TopoDS_Edge):
+        current_dis = dist_point2shape(self, fp_edge)
+        if current_dis < self.edge_nearby_threshold:
+            return True
         else:
-            raise TypeError('error surface type')
+            return False
 
-    def nor_cal(self):
-        """
-        计算该点处的法线
-        :return:
-        """
-        self.nor = normal_at(self, self.aligned_face)
+    def edge_nearby_cal(self):
+        self.nearby_threshold_cal()
+
+        edge_explorer = TopExp_Explorer(self.aligned_face, TopAbs_EDGE)
+
+        while edge_explorer.More():
+            edge = edge_explorer.Current()
+            edge = topods.Edge(edge)
+            edge_explorer.Next()
+
+            # # 过滤无效边
+            # current_cur = BRep_Tool.Curve(edge)[0]
+            # if not isinstance(current_cur, Geom_Curve):
+            #     print('当前边无法处理，已跳过')
+            #     continue
+
+            if is_edge_useful(edge, self.edges_useful) and self.is_target_edge_nearby(edge):
+                self.is_edge_nearby = 1
+                return
 
     def get_save_str(self, is_contain_xyz=True):
         if is_contain_xyz:
-            save_str = (f'{self.X()}\t{self.Y()}\t{self.Z()}\t' +  # 坐标
-                        f'{self.dir.X()}\t{self.dir.Y()}\t{self.dir.Z()}\t' +  # 主方向
-                        f'{self.dim}\t' +  # 主尺寸
-                        f'{self.nor.X()}\t{self.nor.Y()}\t{self.nor.Z()}\t' +  # 法线
-                        f'{self.loc.X()}\t{self.loc.Y()}\t{self.loc.Z()}\n')  # 主位置
+            save_str = (f'{self.X()}\t{self.Y()}\t{self.Z()}\t' +
+                        f'{self.mad.X()}\t{self.mad.Y()}\t{self.mad.Z()}\t' +
+                        f'{self.is_edge_nearby}\t{self.pmt}\n')
         else:
-            save_str = (f'{self.dir.X()}\t{self.dir.Y()}\t{self.dir.Z()}\t' +  # 主方向
-                        f'{self.dim}\t' +  # 主尺寸
-                        f'{self.nor.X()}\t{self.nor.Y()}\t{self.nor.Z()}\t' +  # 法线
-                        f'{self.loc.X()}\t{self.loc.Y()}\t{self.loc.Z()}\n')  # 主位置
+            save_str = (f'{self.mad.X()}\t{self.mad.Y()}\t{self.mad.Z()}\t' +
+                        f'{self.is_edge_nearby}\t{self.pmt}\n')
 
         return save_str
 
@@ -266,24 +243,6 @@ def step_read_ocaf(filename):
     return shapes_fuse(_shapes)
 
 
-def shapes_fuse(shapes: list):
-    if len(shapes) == 0:
-        return TopoDS_Shape()  # 返回空形状
-
-    elif len(shapes) == 1:
-        return shapes[0]
-
-    builder = BRep_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-
-    for shape in shapes:
-        # if shape.ShapeType() == TopAbs_SOLID:
-        builder.Add(compound, shape)
-
-    return compound
-
-
 def step2stl(step_name, stl_name, deflection=0.1):
     shape_occ = step_read_ocaf(step_name)
     shapeocc2stl(shape_occ, stl_name, deflection)
@@ -303,6 +262,24 @@ def step2stl_batched_(dir_path, deflection=0.1):
         stl_path = os.path.splitext(c_step)[0] + '.stl'
 
         step2stl(c_step, stl_path, deflection)
+
+
+def shapes_fuse(shapes: list):
+    if len(shapes) == 0:
+        return TopoDS_Shape()  # 返回空形状
+
+    elif len(shapes) == 1:
+        return shapes[0]
+
+    builder = BRep_Builder()
+    compound = TopoDS_Compound()
+    builder.MakeCompound(compound)
+
+    for shape in shapes:
+        # if shape.ShapeType() == TopAbs_SOLID:
+        builder.Add(compound, shape)
+
+    return compound
 
 
 def shape_area(shape_occ: TopoDS_Shape):
@@ -330,6 +307,31 @@ def shapeocc2stl(shape_occ, save_path, deflection=0.1):
     stl_writer.Write(shape_occ, save_path)
 
 
+def is_edge_valid(fp_edge: TopoDS_Edge):
+    """
+    判断边是否有效，无效边不能参与计算
+    """
+    curve = BRep_Tool.Curve(fp_edge)[0]
+
+    if isinstance(curve, Geom_Curve):
+        return True
+
+    else:
+        return False
+
+
+def is_edge_useful(edge: TopoDS_Edge, edges_useful: TopTools_IndexedMapOfShape):
+    """
+    判断边是有有用，即判断该边是否在有用边列表里
+    """
+    # assert edges_useful.Size() != 0
+
+    if edges_useful.Contains(edge):
+        return True
+    else:
+        return False
+
+
 def is_point_in_shape(point: gp_Pnt, shape: TopoDS_Shape, tol: float = precision.Confusion()):
     dist2shape = dist_point2shape(point, shape)
 
@@ -351,22 +353,243 @@ def dist_point2shape(point: gp_Pnt, shape: TopoDS_Shape):
     return point.Distance(nearest_pnt)
 
 
-def normal_at(point: gp_Pnt, face: TopoDS_Face):
+def edge_filter(edge_list: list):
     """
-    获取 face 在 point 处的法线
+    查找所有非空边
     """
-    surf_local = BRep_Tool.Surface(face)
-    proj_local = GeomAPI_ProjectPointOnSurf(point, surf_local)
+    valid_edges = []
 
-    if proj_local.IsDone():
-        fu, fv = proj_local.Parameters(1)
-        face_props = GeomLProp_SLProps(surf_local, fu, fv, 1, precision.Confusion())
-        normal = face_props.Normal()
+    for edge in edge_list:
+        if is_edge_valid(edge):
+            valid_edges.append(edge)
 
-        return normal
+    return valid_edges
 
-    else:
-        raise ValueError('Can not perform projection')
+
+def get_edges_useful(shape_occ: TopoDS_Shape):
+    """
+    从 occt 的 shape 中提取计算边缘有用的边，有用边包含：
+    1. 在边界处不 G1 连续的面
+    2. 有效边包含在边界处G1或更高连续性的面 2. 在边界处G1连续或更高连续性的面，但是基元类型不同或基元类型相同但参数不同
+    """
+
+    # 找到每条边对应的两个面
+    def is_edge_in_face(fp_edge, fp_face):
+        """
+        判断某条边是否在某个面内
+        """
+        edge_exp = TopExp_Explorer(fp_face, TopAbs_EDGE)
+        while edge_exp.More():
+            edge_local = edge_exp.Current()
+            edge_local = topods.Edge(edge_local)
+            edge_exp.Next()
+
+            if fp_edge.IsSame(edge_local):
+                return True
+
+        return False
+
+    def find_adjfaces():
+        """
+        找到所有边对应的面
+        这里只考虑每条边对应两个面的情况
+        :return:
+        """
+        # key: edge, value: faces
+        edge_adjface = {}
+
+        for i in range(1, edges_all.Size() + 1):
+            cdege = edges_all.FindKey(i)
+            adjfaces = []
+
+            # 遍历全部面
+            face_exp = TopExp_Explorer(shape_occ, TopAbs_FACE)
+            while face_exp.More():
+                if len(adjfaces) == 2:
+                    break
+
+                face_local = face_exp.Current()
+                face_local = topods.Face(face_local)
+                face_exp.Next()
+
+                if is_edge_in_face(cdege, face_local):
+                    adjfaces.append(face_local)
+
+            if len(adjfaces) == 2:
+                edge_adjface[cdege] = adjfaces
+
+        return edge_adjface
+
+    def get_face_nornal_at_pnt(fp_point: gp_Pnt, fp_face: TopoDS_Face):
+        """
+        获取 fp_face 在 fp_point 处的法线
+        """
+        surf_local = BRep_Tool.Surface(fp_face)
+        proj_local = GeomAPI_ProjectPointOnSurf(fp_point, surf_local)
+
+        if proj_local.IsDone():
+            fu, fv = proj_local.Parameters(1)
+            face_props = GeomLProp_SLProps(surf_local, fu, fv, 1, precision.Confusion())
+            normal_at = face_props.Normal()
+
+            return normal_at
+
+        else:
+            raise ValueError('Can not perform projection')
+
+    def is_edge_useful_by_adjface(fp_edge, adj_face1, adj_face2):
+        """
+        通过该边对应的两个面判断该边是否有效
+        G1 或更高连续性情况下判定为无效
+        :param fp_edge:
+        :param adj_face1:
+        :param adj_face2:
+        :return:
+        """
+        # 取该边的中点
+        acurve_info = BRep_Tool.Curve(fp_edge)
+        acurve, p_start, p_end = acurve_info
+        mid_pnt = acurve.Value((p_start + p_end) / 2.0)
+
+        # 计算这个点到两个面的投影点的法线，法线共线则相切
+        norm1 = get_face_nornal_at_pnt(mid_pnt, adj_face1)
+        norm2 = get_face_nornal_at_pnt(mid_pnt, adj_face2)
+
+        # 判断两向量是否共线：
+        angle = norm1.Angle(norm2)
+        prec_resolution = precision.Confusion() + 1e-5
+
+        if angle < prec_resolution or abs(angle - np.pi) < prec_resolution:  # 法线共线，则边无用
+            # print('发现无效边，角度差为：', min(angle, abs(angle - np.pi)))
+            return False
+        else:
+            return True
+
+    def is_edge_useful_by_commomobj(fp_edge, adj_face1, adj_face2):
+        """
+        通过判断边对应的两个面是否为同一实体，判断是否有效
+        是同一实体判断为无效
+        :param fp_edge:
+        :param adj_face1:
+        :param adj_face2:
+        :return:
+        """
+        type1 = face_type(adj_face1)
+        type2 = face_type(adj_face2)
+        surf1 = BRep_Tool.Surface(adj_face1)
+        surf2 = BRep_Tool.Surface(adj_face2)
+
+        # 类型不同，直接判别为不同
+        if type1 != type2:
+            return True
+
+        elif type1 == 'plane':
+            pln1 = Geom_Plane.DownCast(surf1).Pln()
+            pln2 = Geom_Plane.DownCast(surf2).Pln()
+
+            # 提取法向量
+            n1 = pln1.Axis().Direction()
+            n2 = pln2.Axis().Direction()
+
+            # 判断法向量是否平行（点乘绝对值接近 1）
+            dot = abs(n1.Dot(n2))
+            are_parallel = abs(dot - 1.0) < precision.Confusion()
+
+            if are_parallel:
+                # 任取 pln1 上的点，例如其位置点
+                pnt = pln1.Location()
+                # 计算该点到 pln2 的距离
+                dist = pln2.Distance(pnt)
+
+                # 两平面重合，边无效
+                if dist < precision.Confusion():
+                    return False
+                else:
+                    return True
+            else:
+                return True
+
+        elif type1 == 'cylinder':
+            c1 = Geom_CylindricalSurface.DownCast(surf1).Cylinder()
+            c2 = Geom_CylindricalSurface.DownCast(surf2).Cylinder()
+
+            # 半径不同，基元不同，边有效
+            if abs(c1.Radius() - c2.Radius()) > precision.Confusion():
+                return True
+
+            # 方向
+            dir1 = c1.Axis().Direction()
+            dir2 = c2.Axis().Direction()
+            if abs(abs(dir1.Dot(dir2)) - 1.0) > precision.Confusion():
+                return True
+
+            # 轴线重合
+            p1 = c1.Axis().Location()
+            dist = c2.Axis().Distance(p1)
+            if dist > precision.Confusion():
+                return True
+
+            return False
+
+        elif type1 == 'cone':
+
+            c1 = Geom_ConicalSurface.DownCast(surf1).Cone()
+            c2 = Geom_ConicalSurface.DownCast(surf2).Cone()
+            # 半角
+            if abs(c1.SemiAngle() - c2.SemiAngle()) > precision.Confusion():
+                return True
+            # 方向
+            if abs(abs(c1.Axis().Direction().Dot(c2.Axis().Direction())) - 1.0) > precision.Confusion():
+                return True
+            # 顶点
+            if c1.Apex().Distance(c2.Apex()) > precision.Confusion():
+                return True
+
+            return False
+
+        elif type1 == 'sphere':
+            s1 = Geom_SphericalSurface.DownCast(surf1).Sphere()
+            s2 = Geom_SphericalSurface.DownCast(surf2).Sphere()
+            if abs(s1.Radius() - s2.Radius()) > precision.Confusion():
+                return True
+            if s1.Location().Distance(s2.Location()) > precision.Confusion():
+                return True
+
+            return False
+
+        # 自由曲面直接判定为面不同，边有效
+        else:
+            return True
+
+    # 创建不重复容器
+    edges_useful = TopTools_IndexedMapOfShape()
+    edges_useful.Clear()
+    edges_all = TopTools_IndexedMapOfShape()
+
+    # 获取全部边
+    edge_explorer = TopExp_Explorer(shape_occ, TopAbs_EDGE)
+    while edge_explorer.More():
+        edge = edge_explorer.Current()
+        edge = topods.Edge(edge)
+        edge_explorer.Next()
+
+        try:
+            if is_edge_valid(edge):
+                edges_all.Add(edge)
+        except:
+            print('计算有效边时发现无法处理的边，已跳过')
+
+    edge_face_pair = find_adjfaces()
+
+    for cedge in edge_face_pair.keys():
+        try:
+            # if is_edge_useful_by_adjface(cedge, *edge_face_pair[cedge]):
+            if is_edge_useful_by_commomobj(cedge, *edge_face_pair[cedge]):
+                edges_useful.Add(cedge)
+        except:
+            print('计算有用边时发现无法处理的边，已跳过')
+
+    return edges_useful
 
 
 def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt, prec=0.1):
@@ -431,7 +654,13 @@ def step2pcd(step_path, n_points, save_path, deflection=0.1, xyz_only=True):
     else:
         # 真实生成的点数，使用poisson_disk_sample得到的点数一般大于指定点数
         n_points_real = vertex_matrix.shape[0]
+
         model_occ = step_read_ocaf(step_path)
+        model_area = shape_area(model_occ)
+        edges_useful = get_edges_useful(model_occ)
+
+        if edges_useful.Size() == 0:
+            print('current model without Valid Edges')
 
         save_path = os.path.abspath(save_path)
         with open(save_path, 'w') as file_write:
@@ -444,7 +673,7 @@ def step2pcd(step_path, n_points, save_path, deflection=0.1, xyz_only=True):
                 face_aligned = get_point_aligned_face(model_occ, current_point, deflection)
 
                 if face_aligned is not None:
-                    current_datapoint = Point3DForDataSet(current_point, face_aligned)
+                    current_datapoint = Point3DForDataSet(current_point, face_aligned, model_area, edges_useful)
                     file_write.writelines(current_datapoint.get_save_str())
 
                 else:
