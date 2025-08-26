@@ -15,7 +15,7 @@ from OCC.Core.GProp import GProp_PGProps, GProp_GProps
 from OCC.Core.BRepGProp import brepgprop
 from OCC.Core.BRep import BRep_Tool
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Common
-from OCC.Core.Geom import Geom_ConicalSurface, Geom_Plane, Geom_CylindricalSurface, Geom_Curve
+from OCC.Core.Geom import Geom_ConicalSurface, Geom_Plane, Geom_CylindricalSurface, Geom_Curve, Geom_SphericalSurface
 from OCC.Core.TDocStd import TDocStd_Document
 from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
 from OCC.Core.STEPCAFControl import STEPCAFControl_Reader
@@ -42,7 +42,7 @@ import itertools
 from collections import Counter
 
 # self
-import mesh_proc
+from processor import mesh_proc
 from utils import utils
 
 
@@ -58,55 +58,59 @@ class Point3DForDataSet(gp_Pnt):
         self.aligned_face = aligned_face
         self.aligned_shape_area = aligned_shape_area
 
-        self.eula_angle = gp_Vec(0.0, 0.0, -1.0)
+        self.pmt = -1
+        self.mad = gp_Vec(0.0, 0.0, -1.0)
         self.is_edge_nearby = 0
         self.edge_nearby_threshold = 0.0
 
-        self.meta_eula_cal()
+        self.pmt_mad_cal()
         self.edge_nearby_cal()
 
-    def meta_eula_cal(self):
-        # 计算所在基元类型 及欧拉角
+    def pmt_mad_cal(self):
+        # 计算所在基元类型及主要方向
         aligned_surface = BRep_Tool.Surface(self.aligned_face)
-        surface_type = aligned_surface.DynamicType()
-        type_name = surface_type.Name()
+        type_name = face_type(self.aligned_face)
 
-        if type_name == 'Geom_ConicalSurface':
-            self.meta_type = 1
-            self.eula_angle = Geom_ConicalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
-            self.eula_angle_rectify()  # 校正方向，使方向唯一
+        if type_name == 'cone':
+            self.pmt = 1
+            self.mad = Geom_ConicalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.mad_rectify()  # 校正方向，使方向唯一
 
-        elif type_name == 'Geom_CylindricalSurface':
-            self.meta_type = 2
-            self.eula_angle = Geom_CylindricalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
-            self.eula_angle_rectify()  # 校正方向，使方向唯一
+        elif type_name == 'cylinder':
+            self.pmt = 2
+            self.mad = Geom_CylindricalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.mad_rectify()  # 校正方向，使方向唯一
 
-        elif type_name == 'Geom_Plane':
-            self.meta_type = 3
-            self.eula_angle = Geom_Plane.DownCast(aligned_surface).Axis().Direction().XYZ()
-            self.eula_angle_rectify()  # 校正方向，使方向唯一
+        elif type_name == 'plane':
+            self.pmt = 3
+            self.mad = Geom_Plane.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.mad_rectify()  # 校正方向，使方向唯一
+
+        # elif type_name == 'Geom_SphericalSurface':
+        #     self.pmt = 4
+        #     self.mad = gp_Vec(0.0, 0.0, -1.0)
 
         else:
             # 其它不好定义的类型，欧拉角统一定义为 (0, 0, -1), 这批弄完后统一改
-            self.meta_type = 0
+            self.pmt = 0
 
-    def eula_angle_rectify(self):
+    def mad_rectify(self):
         """
         保证欧拉角方向唯一
         """
-        ax_x = self.eula_angle.X()
-        ax_y = self.eula_angle.Y()
-        ax_z = self.eula_angle.Z()
+        ax_x = self.mad.X()
+        ax_y = self.mad.Y()
+        ax_z = self.mad.Z()
 
         zero_lim = precision.Confusion()
         if ax_z < -zero_lim:  # z < 0
-            self.eula_angle *= -1.0
-        elif abs(ax_z) <= zero_lim:  # z为零
-            if ax_y < -zero_lim:  # z为零, y为负数
-                self.eula_angle *= -1.0
-            elif abs(ax_y) <= zero_lim:  # z为零, y为零
-                if ax_x < -zero_lim:  # z为零, y为零, x为负数
-                    self.eula_angle *= -1.0
+            self.mad *= -1.0
+        elif abs(ax_z) <= zero_lim and ax_y < -zero_lim:  # z为零, y为负数
+            self.mad *= -1.0
+        elif abs(ax_z) <= zero_lim and abs(ax_y) <= zero_lim and ax_x < -zero_lim:  # z为零, y为零, x为负数
+            self.mad *= -1.0
+        else:
+            raise ValueError('error main axis direction length')
 
     # 计算边缘邻近阈值
     def nearby_threshold_cal(self):
@@ -145,13 +149,49 @@ class Point3DForDataSet(gp_Pnt):
     def get_save_str(self, is_contain_xyz=True):
         if is_contain_xyz:
             save_str = (f'{self.X()}\t{self.Y()}\t{self.Z()}\t' +
-                        f'{self.eula_angle.X()}\t{self.eula_angle.Y()}\t{self.eula_angle.Z()}\t' +
-                        f'{self.is_edge_nearby}\t{self.meta_type}\n')
+                        f'{self.mad.X()}\t{self.mad.Y()}\t{self.mad.Z()}\t' +
+                        f'{self.is_edge_nearby}\t{self.pmt}\n')
         else:
-            save_str = (f'{self.eula_angle.X()}\t{self.eula_angle.Y()}\t{self.eula_angle.Z()}\t' +
-                        f'{self.is_edge_nearby}\t{self.meta_type}\n')
+            save_str = (f'{self.mad.X()}\t{self.mad.Y()}\t{self.mad.Z()}\t' +
+                        f'{self.is_edge_nearby}\t{self.pmt}\n')
 
         return save_str
+
+
+def face_type(face_occt: TopoDS_Face):
+    """
+    获取 occt 面的类型
+    :param face_occt:
+    :return: ['plane', 'cylinder', 'cone', 'sphere', 'freeform']
+    """
+    surface = BRep_Tool.Surface(face_occt)
+    surface_type = surface.DynamicType()
+    type_name = surface_type.Name()
+    # 可能是 [
+    # 'GeomPlate_Surface',
+    # 'Geom_BSplineSurface',
+    # 'Geom_BezierSurface',
+    # 'Geom_RectangularTrimmedSurface',
+    # 'Geom_ConicalSurface',
+    # 'Geom_CylindricalSurface',
+    # 'Geom_Plane',
+    # 'Geom_SphericalSurface',
+    # 'Geom_ToroidalSurface',
+    # 'Geom_OffsetSurface'
+    # 'Geom_SurfaceOfLinearExtrusion',
+    # 'Geom_SurfaceOfRevolution',
+    # 'ShapeExtend_CompositeSurface',
+    # ]
+    if type_name == 'Geom_Plane':
+        return 'plane'
+    elif type_name == 'Geom_CylindricalSurface':
+        return 'cylinder'
+    elif type_name == 'Geom_ConicalSurface':
+        return 'cone'
+    elif type_name == 'Geom_SphericalSurface':
+        return 'sphere'
+    else:
+        return 'freeform'
 
 
 def step_read_ctrl(filename):
@@ -329,7 +369,8 @@ def edge_filter(edge_list: list):
 def get_edges_useful(shape_occ: TopoDS_Shape):
     """
     从 occt 的 shape 中提取计算边缘有用的边，有用边包含：
-    # 1. 在边界处不 G1 连续的面
+    1. 在边界处不 G1 连续的面
+    2. 有效边包含在边界处G1或更高连续性的面 2. 在边界处G1连续或更高连续性的面，但是基元类型不同或基元类型相同但参数不同
     """
 
     # 找到每条边对应的两个面
@@ -349,6 +390,12 @@ def get_edges_useful(shape_occ: TopoDS_Shape):
         return False
 
     def find_adjfaces():
+        """
+        找到所有边对应的面
+        这里只考虑每条边对应两个面的情况
+        :return:
+        """
+        # key: edge, value: faces
         edge_adjface = {}
 
         for i in range(1, edges_all.Size() + 1):
@@ -391,6 +438,14 @@ def get_edges_useful(shape_occ: TopoDS_Shape):
             raise ValueError('Can not perform projection')
 
     def is_edge_useful_by_adjface(fp_edge, adj_face1, adj_face2):
+        """
+        通过该边对应的两个面判断该边是否有效
+        G1 或更高连续性情况下判定为无效
+        :param fp_edge:
+        :param adj_face1:
+        :param adj_face2:
+        :return:
+        """
         # 取该边的中点
         acurve_info = BRep_Tool.Curve(fp_edge)
         acurve, p_start, p_end = acurve_info
@@ -410,11 +465,108 @@ def get_edges_useful(shape_occ: TopoDS_Shape):
         else:
             return True
 
+    def is_edge_useful_by_commomobj(fp_edge, adj_face1, adj_face2):
+        """
+        通过判断边对应的两个面是否为同一实体，判断是否有效
+        是同一实体判断为无效
+        :param fp_edge:
+        :param adj_face1:
+        :param adj_face2:
+        :return:
+        """
+        type1 = face_type(adj_face1)
+        type2 = face_type(adj_face2)
+        surf1 = BRep_Tool.Surface(adj_face1)
+        surf2 = BRep_Tool.Surface(adj_face2)
+
+        # 类型不同，直接判别为不同
+        if type1 != type2:
+            return True
+
+        elif type1 == 'plane':
+            pln1 = Geom_Plane.DownCast(surf1).Pln()
+            pln2 = Geom_Plane.DownCast(surf2).Pln()
+
+            # 提取法向量
+            n1 = pln1.Axis().Direction()
+            n2 = pln2.Axis().Direction()
+
+            # 判断法向量是否平行（点乘绝对值接近 1）
+            dot = abs(n1.Dot(n2))
+            are_parallel = abs(dot - 1.0) < precision.Confusion()
+
+            if are_parallel:
+                # 任取 pln1 上的点，例如其位置点
+                pnt = pln1.Location()
+                # 计算该点到 pln2 的距离
+                dist = pln2.Distance(pnt)
+
+                # 两平面重合，边无效
+                if dist < precision.Confusion():
+                    return False
+                else:
+                    return True
+            else:
+                return True
+
+        elif type1 == 'cylinder':
+            c1 = Geom_CylindricalSurface.DownCast(surf1).Cylinder()
+            c2 = Geom_CylindricalSurface.DownCast(surf2).Cylinder()
+
+            # 半径不同，基元不同，边有效
+            if abs(c1.Radius() - c2.Radius()) > precision.Confusion():
+                return True
+
+            # 方向
+            dir1 = c1.Axis().Direction()
+            dir2 = c2.Axis().Direction()
+            if abs(abs(dir1.Dot(dir2)) - 1.0) > precision.Confusion():
+                return True
+
+            # 轴线重合
+            p1 = c1.Axis().Location()
+            dist = c2.Axis().Distance(p1)
+            if dist > precision.Confusion():
+                return True
+
+            return False
+
+        elif type1 == 'cone':
+
+            c1 = Geom_ConicalSurface.DownCast(surf1).Cone()
+            c2 = Geom_ConicalSurface.DownCast(surf2).Cone()
+            # 半角
+            if abs(c1.SemiAngle() - c2.SemiAngle()) > precision.Confusion():
+                return True
+            # 方向
+            if abs(abs(c1.Axis().Direction().Dot(c2.Axis().Direction())) - 1.0) > precision.Confusion():
+                return True
+            # 顶点
+            if c1.Apex().Distance(c2.Apex()) > precision.Confusion():
+                return True
+
+            return False
+
+        elif type1 == 'sphere':
+            s1 = Geom_SphericalSurface.DownCast(surf1).Sphere()
+            s2 = Geom_SphericalSurface.DownCast(surf2).Sphere()
+            if abs(s1.Radius() - s2.Radius()) > precision.Confusion():
+                return True
+            if s1.Location().Distance(s2.Location()) > precision.Confusion():
+                return True
+
+            return False
+
+        # 自由曲面直接判定为面不同，边有效
+        else:
+            return True
+
+    # 创建不重复容器
     edges_useful = TopTools_IndexedMapOfShape()
     edges_useful.Clear()
     edges_all = TopTools_IndexedMapOfShape()
 
-    # 遍历全部边
+    # 获取全部边
     edge_explorer = TopExp_Explorer(shape_occ, TopAbs_EDGE)
     while edge_explorer.More():
         edge = edge_explorer.Current()
@@ -431,7 +583,8 @@ def get_edges_useful(shape_occ: TopoDS_Shape):
 
     for cedge in edge_face_pair.keys():
         try:
-            if is_edge_useful_by_adjface(cedge, *edge_face_pair[cedge]):
+            # if is_edge_useful_by_adjface(cedge, *edge_face_pair[cedge]):
+            if is_edge_useful_by_commomobj(cedge, *edge_face_pair[cedge]):
                 edges_useful.Add(cedge)
         except:
             print('计算有用边时发现无法处理的边，已跳过')
@@ -904,6 +1057,12 @@ def read_step_assembly(file_path):
 
     print(f"共读取 {len(solids)} 个零件")
     return solids
+
+
+def test():
+    stepfile = r''
+
+    pass
 
 
 if __name__ == '__main__':

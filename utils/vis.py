@@ -7,8 +7,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 import random
+import re
 # self
-import step_proc
+from processor import step_proc
 import utils
 
 
@@ -33,13 +34,12 @@ def vis_pcd(filepath, attr_show=None, show_normal=False, delimiter='\t'):
     o3d.visualization.draw_geometries([pcd], point_show_normal=show_normal)
 
 
-def vis_step_cloud(file_name, n_points=2500, with_cst=False, attr_show=None, deflection=0.1, tmp_stl='tmp/tmp.stl', tmp_pc='tmp/tmp_pc.txt'):
+def vis_step_cloud(file_name, n_points=2500, with_cst=False, attr_show=None, deflection=0.1, tmp_pc='tmp/tmp_pc.txt', color=None):
     '''
     将STEP文件转化为点云之后进行可视化
     '''
     step_proc.step2pcd(file_name, n_points, tmp_pc, deflection, not with_cst)
-    # vis_pcd(tmp_pc, attr_show)
-    vis_pcd_view(tmp_pc, attr_show, is_save_view=True)
+    vis_pcd_view(tmp_pc, attr_show, is_save_view=True, color=color)
 
     os.remove(tmp_pc)
 
@@ -80,7 +80,7 @@ def get_o3d_viewangle_json(json_file='tmp/camera_params.json', is_print_angle=Fa
     return front, -up
 
 
-def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t', is_save_view=False):
+def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t', is_save_view=False, color=None):
     """
     显示点云，点云每行为xyzijk，分隔符为delimiter
     :param pcd_path:
@@ -88,6 +88,7 @@ def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t', is_save
     :param show_normal:
     :param delimiter:
     :param is_save_view: 是否在关闭本函数后板寸视角，下次自动调取
+    :param color: 所有点统一的颜色 0 - 255 的整数
     :return:
     """
     data_all = np.loadtxt(pcd_path, delimiter=delimiter)
@@ -140,13 +141,13 @@ def vis_pcd_view(pcd_path, attr=None, show_normal=False, delimiter='\t', is_save
 
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
-    # else:
-    #     colors = []
-    #
-    #     for _ in points[:, 0]:
-    #         colors.append((189 / 255, 216 / 255, 232 / 255))
-    #
-    #     pcd.colors = o3d.utility.Vector3dVector(colors)
+    if color is not None:
+        colors = []
+
+        for _ in points[:, 0]:
+            colors.append((color[0] / 255, color[1] / 255, color[2] / 255))
+
+        pcd.colors = o3d.utility.Vector3dVector(colors)
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -246,6 +247,67 @@ def vis_data2d(file_name, delimiter=','):
     plt.show()
 
 
+def vis_cls_log(log_file: str, floats_idx_1=0, floats_idx_2=1):
+    def get_log_floats(_log_file: str) -> np.ndarray:
+        # 定义正则表达式，匹配浮点数
+        _float_pattern = r'[-+]?\d*\.\d+|\d+\.\d*e[-+]?\d+'
+
+        # 用于存储提取的浮点数
+        _floats = []
+
+        # 打开文件并逐行读取
+        with open(_log_file, 'r') as _file:
+            for _line in _file:
+                _c_line = []
+
+                # 查找所有匹配的浮点数
+                _matches = re.findall(_float_pattern, _line)
+                for _match in _matches:
+
+                    # 将匹配的字符串转换为浮点数
+                    _num = float(_match)
+
+                    # 如果是整数，则跳过
+                    if _num.is_integer():
+                        continue
+
+                    # 将浮点数添加到列表中
+                    _c_line.append(_num)
+
+                _floats.append(_c_line)
+
+        _floats = np.array(_floats)
+        return _floats
+
+    floats = get_log_floats(log_file)
+
+    # 绘图
+    plt.figure(figsize=(10, 5))
+    n = floats.shape[0]
+    x = np.arange(n)
+
+    y1 = floats[:, floats_idx_1]
+    y2 = floats[:, floats_idx_2]
+
+    print(max(y2))
+
+    # 绘制第一条折线
+    plt.plot(x, y1, label='train ins acc', linestyle='-', color='b')
+
+    # 绘制第二条折线
+    plt.plot(x, y2, label='eval ins acc', linestyle='-', color='r')
+
+    # 添加标题和标签
+    plt.xlabel('epoch')
+    plt.ylabel('accuracy')
+
+    plt.legend()
+    plt.grid(True, linestyle='--', color='gray', alpha=0.7)
+
+    # 显示图形
+    plt.show()
+
+
 if __name__ == '__main__':
     # vis_pcd(r'C:\Users\ChengXi\Desktop\sketches\gear.txt', show_normal=True)
     # vis_mesh_view(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\train\bearing')
@@ -254,8 +316,12 @@ if __name__ == '__main__':
 
     # vis_mesh_view_each_class(r'D:\document\DeepLearning\DataSet\MCB\MCB_B\test')
 
-    vis_step_cloud(r'C:\Users\ChengXi\Desktop\20171201-095533-37961.STEP', 15000, False)
+    # vis_step_cloud(r'C:\Users\ChengXi\Desktop\20171201-095533-37961.STEP', 15000, False)
     # vis_shapeocc(r'C:\Users\ChengXi\Desktop\sketches\gear.STEP')
+
+    vis_cls_log(r'C:\Users\ChengXi\Desktop\pointnet-2025-08-20 12-27-03.txt')
+
+
     pass
 
 
