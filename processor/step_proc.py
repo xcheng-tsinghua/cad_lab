@@ -1,4 +1,6 @@
 # open cascade
+import random
+
 from OCC.Core.STEPControl import STEPControl_Reader
 from OCC.Core.StlAPI import StlAPI_Writer
 from OCC.Core.IFSelect import IFSelect_RetDone
@@ -26,6 +28,14 @@ from OCC.Core.TopTools import TopTools_IndexedMapOfShape
 from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCC.Core.GeomLProp import GeomLProp_SLProps
 from OCC.Core.BRepTools import breptools
+from OCC.Core.GeomAdaptor import GeomAdaptor_Surface
+from OCC.Core.GeomAbs import GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere
+from OCC.Display.SimpleGui import init_display
+from OCC.Core.BRepBndLib import brepbndlib
+from OCC.Core.Bnd import Bnd_Box
+from OCC.Core.gp import gp_Trsf, gp_Vec, gp_Pnt
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_Transform
+from OCC.Core.STEPControl import STEPControl_Writer, STEPControl_AsIs
 
 # others
 import os
@@ -41,6 +51,10 @@ from datetime import datetime
 import multiprocessing
 import itertools
 from collections import Counter
+import shutil
+from functools import partial
+from multiprocessing import Pool
+import uuid
 
 # self
 from processor import mesh_proc
@@ -51,9 +65,14 @@ class Point3DForDataSet(gp_Pnt):
     """
     使用类处理点的额外属性
     """
-    def __init__(self, pnt_loc: gp_Pnt, aligned_face: TopoDS_Face):
+    def __init__(self, pnt_loc: gp_Pnt, aligned_face: TopoDS_Face, prim_idx: int):
         super().__init__(pnt_loc.XYZ())
+
+        aligned_surface = BRep_Tool.Surface(aligned_face)
         self.aligned_face = aligned_face
+        self.prim_idx = prim_idx
+        self.surf_adaptor = GeomAdaptor_Surface(aligned_surface)
+        self.type_name = face_type(self.surf_adaptor)
 
         self.pmt = -1
         self.dir = gp_Vec(0.0, 0.0, -1.0)
@@ -70,25 +89,22 @@ class Point3DForDataSet(gp_Pnt):
         计算所在基元类型及主要方向
         :return:
         """
-        aligned_surface = BRep_Tool.Surface(self.aligned_face)
-        type_name = face_type(self.aligned_face)
-
-        if type_name == 'plane':
+        if self.type_name == 'plane':
             self.pmt = 0
-            self.dir = Geom_Plane.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.dir = self.surf_adaptor.Plane().Axis().Direction().XYZ()
 
-        elif type_name == 'cylinder':
+        elif self.type_name == 'cylinder':
             self.pmt = 1
-            self.dir = Geom_CylindricalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.dir = self.surf_adaptor.Cylinder().Axis().Direction().XYZ()
 
-        elif type_name == 'cone':
+        elif self.type_name == 'cone':
             self.pmt = 2
-            self.dir = Geom_ConicalSurface.DownCast(aligned_surface).Axis().Direction().XYZ()
+            self.dir = self.surf_adaptor.Cone().Axis().Direction().XYZ()
 
-        elif type_name == 'sphere':
+        elif self.type_name == 'sphere':
             self.pmt = 3
 
-        elif type_name == 'freeform':
+        elif self.type_name == 'freeform':
             self.pmt = 4
 
         else:
@@ -100,25 +116,23 @@ class Point3DForDataSet(gp_Pnt):
         ax_z = self.dir.Z()
 
         zero_lim = precision.Confusion()
-        if ax_z < -zero_lim:  # z < 0
+        if ax_z < -zero_lim:  # z < 0 时, 反转
             self.dir *= -1.0
-        elif abs(ax_z) <= zero_lim and ax_y < -zero_lim:  # z为零, y为负数
+        elif abs(ax_z) <= zero_lim and ax_y < -zero_lim:  # z为零, y为负数, 反转
             self.dir *= -1.0
-        elif abs(ax_z) <= zero_lim and abs(ax_y) <= zero_lim and ax_x < -zero_lim:  # z为零, y为零, x为负数
+        elif abs(ax_z) <= zero_lim and abs(ax_y) <= zero_lim and ax_x < -zero_lim:  # z为零, y为零, x为负数, 反转
             self.dir *= -1.0
         else:
-            raise ValueError('error main axis direction length')
+            # 无需反转
+            pass
 
     def dim_loc_cal(self):
         """
         计算主尺寸和主位置
         :return:
         """
-        aligned_surface = BRep_Tool.Surface(self.aligned_face)
-        type_name = face_type(self.aligned_face)
-
-        if type_name == 'plane':  # 平面无主尺寸
-            pln = Geom_Plane.DownCast(aligned_surface).Plane()
+        if self.type_name == 'plane':  # 平面无主尺寸
+            pln = self.surf_adaptor.Plane()
             a, b, c, d = pln.Coefficients()
 
             ad = a * d
@@ -126,10 +140,11 @@ class Point3DForDataSet(gp_Pnt):
             cd = c * d
             length = (a * a + b * b + c * c) ** 0.5
 
-            self.loc = gp_Pnt(- ad / length, - bd / length, - cd / length)
+            perpendicular_foot = gp_Pnt(- ad / length, - bd / length, - cd / length)
+            self.loc = perpendicular_foot
 
-        elif type_name == 'cylinder':
-            cy_surf = Geom_CylindricalSurface.DownCast(aligned_surface).Cylinder()
+        elif self.type_name == 'cylinder':
+            cy_surf = self.surf_adaptor.Cylinder()
             self.dim = cy_surf.Radius()
 
             axis = cy_surf.Axis()
@@ -137,22 +152,23 @@ class Point3DForDataSet(gp_Pnt):
             cydir = axis.Direction()  # 轴线方向 (gp_Dir)
 
             # 投影长度 (点积)
-            t = - cyloc.Dot(cydir) / cydir.Magnitude() ** 2
+            t = - gp_Vec(cyloc.XYZ()).Dot(gp_Vec(cydir))
 
             # 垂足坐标
-            self.loc = cyloc + t * cydir
+            perpendicular_foot = gp_Pnt(cyloc.XYZ() + cydir.XYZ().Multiplied(t))
+            self.loc = perpendicular_foot
 
-        elif type_name == 'cone':
-            cone_surf = Geom_ConicalSurface.DownCast(aligned_surface).Cone()
+        elif self.type_name == 'cone':
+            cone_surf = self.surf_adaptor.Cone()
             self.dim = cone_surf.SemiAngle()
             self.loc = cone_surf.Apex()
 
-        elif type_name == 'sphere':
-            sph_surf = Geom_SphericalSurface.DownCast(aligned_surface).Sphere()
+        elif self.type_name == 'sphere':
+            sph_surf = self.surf_adaptor.Sphere()
             self.dim = sph_surf.Radius()
             self.loc = sph_surf.Location()
 
-        elif type_name == 'freeform':  # 自由面无主尺寸和主位置
+        elif self.type_name == 'freeform':  # 自由面无主尺寸和主位置
             pass
 
         else:
@@ -167,27 +183,134 @@ class Point3DForDataSet(gp_Pnt):
 
     def get_save_str(self, is_contain_xyz=True):
         if is_contain_xyz:
-            save_str = (f'{self.X()}\t{self.Y()}\t{self.Z()}\t' +  # 坐标
-                        f'{self.dir.X()}\t{self.dir.Y()}\t{self.dir.Z()}\t' +  # 主方向
-                        f'{self.dim}\t' +  # 主尺寸
-                        f'{self.nor.X()}\t{self.nor.Y()}\t{self.nor.Z()}\t' +  # 法线
-                        f'{self.loc.X()}\t{self.loc.Y()}\t{self.loc.Z()}\n')  # 主位置
+            save_str = (f'{self.X()} {self.Y()} {self.Z()} ' +  # 坐标
+                        f'{self.pmt} ' +  # 基元类型
+                        f'{self.dir.X()} {self.dir.Y()} {self.dir.Z()} ' +  # 主方向
+                        f'{self.dim} ' +  # 主尺寸
+                        f'{self.nor.X()} {self.nor.Y()} {self.nor.Z()} ' +  # 法线
+                        f'{self.loc.X()} {self.loc.Y()} {self.loc.Z()} ' +  # 主位置
+                        f'{self.prim_idx}\n')  # 基元索引
         else:
-            save_str = (f'{self.dir.X()}\t{self.dir.Y()}\t{self.dir.Z()}\t' +  # 主方向
-                        f'{self.dim}\t' +  # 主尺寸
-                        f'{self.nor.X()}\t{self.nor.Y()}\t{self.nor.Z()}\t' +  # 法线
-                        f'{self.loc.X()}\t{self.loc.Y()}\t{self.loc.Z()}\n')  # 主位置
+            save_str = (f'{self.dir.X()} {self.dir.Y()} {self.dir.Z()} ' +  # 主方向
+                        f'{self.pmt} ' +  # 基元类型
+                        f'{self.dim} ' +  # 主尺寸
+                        f'{self.nor.X()} {self.nor.Y()} {self.nor.Z()} ' +  # 法线
+                        f'{self.loc.X()} {self.loc.Y()} {self.loc.Z()} ' +  # 主位置
+                        f'{self.prim_idx}\n')  # 基元索引
 
         return save_str
 
 
-def face_type(face_occt: TopoDS_Face):
+def normalize_shape_to_unit_cube(shape):
+    """
+    将 OCC 的 TopoDS_Shape 质心移动到原点，三轴范围移动到 [-1, 1]
+    :param shape:
+    :return:
+    """
+
+    # Step 1: 获取包围盒
+    box = Bnd_Box()
+    brepbndlib.Add(shape, box)
+    xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
+
+    # Step 2: 平移到原点
+    cx = (xmin + xmax) * 0.5
+    cy = (ymin + ymax) * 0.5
+    cz = (zmin + zmax) * 0.5
+    trsf_translate = gp_Trsf()
+    trsf_translate.SetTranslation(gp_Vec(-cx, -cy, -cz))
+    shape_centered = BRepBuilderAPI_Transform(shape, trsf_translate, True).Shape()
+
+    # Step 3: 缩放到 [-1,1]^3
+    dx, dy, dz = xmax - xmin, ymax - ymin, zmax - zmin
+    scale = 1.0 / max(dx, dy, dz)
+    trsf_scale = gp_Trsf()
+    trsf_scale.SetScale(gp_Pnt(0, 0, 0), scale)
+    shape_normalized = BRepBuilderAPI_Transform(shape_centered, trsf_scale, True).Shape()
+
+    return shape_normalized
+
+
+def get_shape_faces(model_occ: TopoDS_Shape):
+    """
+    获取 OCCT 实体中的全部面
+    :param model_occ:
+    :return:
+    """
+    explorer = TopExp_Explorer(model_occ, TopAbs_FACE)
+
+    face_all = []
+    while explorer.More():
+        face = explorer.Current()
+        face = topods.Face(face)
+        face_all.append(face)
+        explorer.Next()
+
+    return face_all
+
+
+def face_type(adaptor: GeomAdaptor_Surface):
     """
     获取 occt 面的类型
-    :param face_occt:
+    :param adaptor:
     :return: ['plane', 'cylinder', 'cone', 'sphere', 'freeform']
     """
-    surface = BRep_Tool.Surface(face_occt)
+
+    try:
+        adaptor.Plane()
+        return 'plane'
+    except:
+        pass
+
+    try:
+        adaptor.Cylinder()
+        return 'cylinder'
+    except:
+        pass
+
+    try:
+        adaptor.Cone()
+        return 'cone'
+    except:
+        pass
+
+    try:
+        adaptor.Sphere()
+        return 'sphere'
+    except:
+        pass
+
+    return 'freeform'
+
+    # else if (!adaptor.Cylinder().IsNull()) {
+    # std::
+    #     cout << "This face is a Cylinder" << std::endl;
+    # }
+    # else if (!adaptor.Cone().IsNull()) {
+    # std::
+    #     cout << "This face is a Cone" << std::endl;
+    # }
+    # else if (!adaptor.Sphere().IsNull()) {
+    # std::
+    #     cout << "This face is a Sphere" << std::endl;
+    # }
+    # else if (!adaptor.Torus().IsNull()) {
+    # std::
+    #     cout << "This face is a Torus" << std::endl;
+    # }
+    # else if (!adaptor.Bezier().IsNull()) {
+    # std::
+    #     cout << "This face is a Bezier Surface" << std::endl;
+    # }
+    # else if (!adaptor.BSpline().IsNull()) {
+    # std::
+    #     cout << "This face is a B-Spline Surface" << std::endl;
+    # }
+    # else {
+    #     std:: cout << "Other surface type (Offset, Extrusion, Revolution, etc.)" << std::endl;
+    # }
+
+
     surface_type = surface.DynamicType()
     type_name = surface_type.Name()
     # 可能是 [
@@ -215,6 +338,29 @@ def face_type(face_occt: TopoDS_Face):
         return 'sphere'
     else:
         return 'freeform'
+
+
+def face_type_name(tds_face: TopoDS_Face):
+    surface = BRep_Tool.Surface(tds_face)
+    surface_type = surface.DynamicType()
+    type_name = surface_type.Name()
+    # 可能是 [
+    # 'GeomPlate_Surface',
+    # 'Geom_BSplineSurface',
+    # 'Geom_BezierSurface',
+    # 'Geom_RectangularTrimmedSurface',
+    # 'Geom_ConicalSurface',
+    # 'Geom_CylindricalSurface',
+    # 'Geom_Plane',
+    # 'Geom_SphericalSurface',
+    # 'Geom_ToroidalSurface',
+    # 'Geom_OffsetSurface'
+    # 'Geom_SurfaceOfLinearExtrusion',
+    # 'Geom_SurfaceOfRevolution',
+    # 'ShapeExtend_CompositeSurface',
+    # ]
+
+    return type_name
 
 
 def step_read_ctrl(filename):
@@ -284,8 +430,20 @@ def shapes_fuse(shapes: list):
     return compound
 
 
-def step2stl(step_name, stl_name, deflection=0.1):
+def step2stl(step_name, stl_name, deflection=0.1, is_normalize=False):
+    """
+    将step文件转化为stl文件
+    :param step_name:
+    :param stl_name:
+    :param deflection:
+    :param is_normalize: 是否将step模型标准化 (中心平移到原点，范围缩放到 [-1, 1]^3)
+    :return:
+    """
     shape_occ = step_read_ocaf(step_name)
+
+    if is_normalize:
+        shape_occ = normalize_shape_to_unit_cube(shape_occ)
+
     shapeocc2stl(shape_occ, stl_name, deflection)
 
 
@@ -330,6 +488,20 @@ def shapeocc2stl(shape_occ, save_path, deflection=0.1):
     stl_writer.Write(shape_occ, save_path)
 
 
+def shapeocc2step(shape, filename):
+    writer = STEPControl_Writer()
+
+    # 添加要写出的shape
+    writer.Transfer(shape, STEPControl_AsIs)
+
+    # 写文件
+    status = writer.Write(filename)
+    if status == IFSelect_RetDone:
+        print(f"STEP file saved: {filename}")
+    else:
+        print("Error: failed to write STEP file")
+
+
 def is_point_in_shape(point: gp_Pnt, shape: TopoDS_Shape, tol: float = precision.Confusion()):
     dist2shape = dist_point2shape(point, shape)
 
@@ -357,11 +529,15 @@ def normal_at(point: gp_Pnt, face: TopoDS_Face):
     """
     surf_local = BRep_Tool.Surface(face)
     proj_local = GeomAPI_ProjectPointOnSurf(point, surf_local)
+    is_reversed = (face.Orientation() == TopAbs_REVERSED)
 
     if proj_local.IsDone():
         fu, fv = proj_local.Parameters(1)
         face_props = GeomLProp_SLProps(surf_local, fu, fv, 1, precision.Confusion())
         normal = face_props.Normal()
+
+        if is_reversed:
+            normal.Reverse()
 
         return normal
 
@@ -379,10 +555,12 @@ def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt, prec=0.1):
     """
     explorer = TopExp_Explorer(model_occ, TopAbs_FACE)
 
+    c_idx = -1
     while explorer.More():
         face = explorer.Current()
         face = topods.Face(face)
         explorer.Next()
+        c_idx += 1
 
         try:
             current_dist = dist_point2shape(point, face)
@@ -390,10 +568,10 @@ def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt, prec=0.1):
             print('无法计算点与当前面的距离，跳过当前面')
             continue
 
-        if current_dist < prec + precision.Confusion():
-            return face
+        if current_dist <= prec + precision.Confusion():
+            return face, c_idx
 
-    return None
+    return None, None
 
 
 def get_logger(name: str = 'log'):
@@ -409,49 +587,75 @@ def get_logger(name: str = 'log'):
     return logger
 
 
-def step2pcd(step_path, n_points, save_path, deflection=0.1, xyz_only=True):
+def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, using_tqdm=True, print_log=True, is_normalize=True):
     """
     将step模型转化为带约束的点云，需要先转化为 mesh
     :param step_path:
-    :param n_points:
     :param save_path:
+    :param n_points:
     :param deflection:
     :param xyz_only:
+    :param using_tqdm: 是否使用进度条
+    :param print_log:
+    :param is_normalize:
     :return:
     """
 
     # 生成 mesh
-    tmp_stl = 'tmp/gen_pcd_cst.stl'
-    step2stl(step_path, tmp_stl)
-    vertex_matrix = mesh_proc.get_points_mslab(tmp_stl, n_points)
+    n_itera = 0
+    n_csample = n_points
+
+    shape_occ = step_read_ocaf(step_path)
+    if is_normalize:
+        shape_occ = normalize_shape_to_unit_cube(shape_occ)
+
+    tmp_stl = f'tmp/{uuid.uuid4()}.stl'  # 生成不重复的临时文件
+    shapeocc2stl(shape_occ, tmp_stl, deflection)
+
+    while True:
+        vertex_matrix = mesh_proc.get_points_mslab(tmp_stl, n_csample)
+        n_real_sampled = vertex_matrix.shape[0]
+
+        if n_itera >= 100:
+            raise ValueError('arrive max iteration, point number can not satisfy')
+        elif n_real_sampled >= n_points * 1.025:
+            break
+        else:
+            n_itera += 1
+            n_csample = int(n_csample * 1.05)
+
+    os.remove(tmp_stl)
 
     if xyz_only:
-        np.savetxt(save_path, vertex_matrix, fmt='%.6f', delimiter='\t')
+        np.savetxt(save_path, vertex_matrix, fmt='%.6f')
 
     else:
         # 真实生成的点数，使用poisson_disk_sample得到的点数一般大于指定点数
         n_points_real = vertex_matrix.shape[0]
-        model_occ = step_read_ocaf(step_path)
 
         save_path = os.path.abspath(save_path)
         with open(save_path, 'w') as file_write:
-            for i in tqdm(range(n_points_real), total=n_points_real):
+            for i in tqdm(range(n_points_real), total=n_points_real, disable=not using_tqdm):
 
-                # 先找到该点所在面
-                current_point = gp_Pnt(float(vertex_matrix[i, 0]), float(vertex_matrix[i, 1]),
-                                       float(vertex_matrix[i, 2]))
+                try:
+                    # 先找到该点所在面
+                    current_point = gp_Pnt(float(vertex_matrix[i, 0]),
+                                           float(vertex_matrix[i, 1]),
+                                           float(vertex_matrix[i, 2]))
 
-                face_aligned = get_point_aligned_face(model_occ, current_point, deflection)
+                    face_aligned, idx = get_point_aligned_face(shape_occ, current_point, deflection)
 
-                if face_aligned is not None:
-                    current_datapoint = Point3DForDataSet(current_point, face_aligned)
-                    file_write.writelines(current_datapoint.get_save_str())
+                    if face_aligned is not None:
+                        current_datapoint = Point3DForDataSet(current_point, face_aligned, idx)
+                        file_write.writelines(current_datapoint.get_save_str())
 
-                else:
-                    print(
-                        f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
+                    elif print_log:
+                        print(f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
 
-    os.remove(tmp_stl)
+                except:
+                    if print_log:
+                        print(
+                            f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
 
 
 def step2pcd_faceseg(step_path, n_points, save_path, deflection=0.1):
@@ -500,8 +704,10 @@ def step2pcd_faceseg(step_path, n_points, save_path, deflection=0.1):
     os.remove(tmp_stl)
 
 
-def step2pcd_batched(dir_path, n_points=2650, is_load_progress=True, xyz_only=False, deflection=0.1):
+def step2pcd_abc(dir_path, n_points=2650, is_load_progress=True, xyz_only=False, deflection=0.1):
     """
+    用于 ABC 数据集里的文件转化
+
     先整理成如下格式
     dir_path
     └─ raw
@@ -525,10 +731,10 @@ def step2pcd_batched(dir_path, n_points=2650, is_load_progress=True, xyz_only=Fa
         │   ├─ car1.stp
         │   ...
         │
-        ├─ plane
-        │   ├─ plane0.stp
-        │   ├─ plane1.stp
-        │   ├─ plane2.stp
+        ├─ airplane
+        │   ├─ airplane0.stp
+        │   ├─ airplane1.stp
+        │   ├─ airplane2.stp
         │   ...
         │
         ...
@@ -646,7 +852,7 @@ def step2pcd_batched(dir_path, n_points=2650, is_load_progress=True, xyz_only=Fa
 
                 print('当前转换：', curr_read_save_paths[0], f'类别-文件索引：{class_ind}-{instance_ind}', '转换进度：', trans_count_all)
                 print('当前存储：', curr_read_save_paths[1], '时间：' + datetime.now().strftime("%Y-%m-%d %H-%M-%S"))
-                step2pcd(curr_read_save_paths[0], n_points, curr_read_save_paths[1], deflection, xyz_only)
+                step2pcd(curr_read_save_paths[0], curr_read_save_paths[1], n_points, deflection, xyz_only)
             except:
                 print('无法读取该STEP文件，已跳过：', curr_read_save_paths[0].encode('gbk', errors='ignore'))
                 logger.info('跳过：' + curr_read_save_paths[0])
@@ -659,9 +865,57 @@ def step2pcd_batched(dir_path, n_points=2650, is_load_progress=True, xyz_only=Fa
     save_finish2json(trans_progress)
 
 
-def step2pcd_batched_(dir_path, n_points=2650, xyz_only=False, deflection=0.1):
+def step2pcd_batched_multi_processing_wrapper(c_step, source_dir, target_dir, n_points, deflection, xyz_only):
+    pcd_path = c_step.replace(source_dir, target_dir)
+    pcd_path = os.path.splitext(pcd_path)[0] + '.txt'
+
+    try:
+        step2pcd(c_step, pcd_path, n_points, deflection, xyz_only, False, False, True)
+    except:
+        print(f'cannot convert this STEP file: {c_step}.')
+
+
+def step2pcd_batched(source_dir, target_dir, n_points=2000, deflection=0.1, xyz_only=False, workers=4):
     """
-    将整个文件夹内的step转化为点云，点云保存在step同级文件夹
+    将 source_dir 下的 STEP 转化为 target_dir 下的点云，两者具备相同的目录层级结构
+    :param source_dir:
+    :param target_dir:
+    :param n_points:
+    :param deflection:
+    :param xyz_only:
+    :param workers: 进程数
+    :return:
+    """
+    # 先在 target_path 下创建相同的目录结构
+    os.makedirs(target_dir, exist_ok=True)
+
+    # 清空target_dir
+    print('clear dir: ', target_dir)
+    shutil.rmtree(target_dir)
+
+    utils.create_tree_like(source_dir, target_dir)
+    files_all = utils.get_allfiles(source_dir, 'step')
+
+    work_func = partial(
+        step2pcd_batched_multi_processing_wrapper,
+        source_dir=source_dir,
+        target_dir=target_dir,
+        n_points=n_points,
+        deflection=deflection,
+        xyz_only=xyz_only
+    )
+
+    with Pool(processes=workers) as pool:
+        _ = list(tqdm(
+            pool.imap(work_func, files_all),
+            total=len(files_all),
+            desc='STEP to point cloud')
+        )
+
+
+def step2pcd_batched_(dir_path, n_points=2000, deflection=0.1, xyz_only=False):
+    """
+    就地将整个文件夹内的step转化为点云，点云保存在step同级文件夹
     """
 
     # 获取当前文件夹内全部step文件
@@ -671,24 +925,11 @@ def step2pcd_batched_(dir_path, n_points=2650, xyz_only=False, deflection=0.1):
     for idx, c_step in enumerate(step_path_all):
         print(f'{idx} / {n_step}')
         pcd_path = os.path.splitext(c_step)[0] + '.txt'
-        step2pcd(c_step, n_points, pcd_path, deflection, xyz_only)
 
-
-def step2pcd_multi_batched(dirs_all: list):
-    """
-    多线程转换
-    :param dirs_all: 目标文件夹列表
-    :return:
-    """
-    threads_all = []
-
-    for c_dir in dirs_all:
-        c_thread = multiprocessing.Process(target=step2pcd_batched, args=(c_dir,))
-        c_thread.start()
-        threads_all.append(c_thread)
-
-    for c_thread in threads_all:
-        c_thread.join()
+        try:
+            step2pcd(c_step, pcd_path, n_points, deflection, xyz_only)
+        except:
+            print(f'cannot convert this STEP file: {c_step}.')
 
 
 def assembly_filter(filename):
@@ -831,7 +1072,52 @@ def read_step_assembly(file_path):
 
 
 def test():
-    stepfile = r''
+    step_dir = utils.get_allfiles(r'D:\document\DeepLearning\paper_draw\AttrVis_ABC', 'step')
+    valid_name = ['Geom_BSplineSurface', 'Geom_BezierSurface', 'Geom_ConicalSurface', 'Geom_SphericalSurface', 'Geom_Plane', 'Geom_CylindricalSurface']
+
+    # 'GeomPlate_Surface',
+    # 'Geom_BSplineSurface',
+    # 'Geom_BezierSurface',
+    # 'Geom_RectangularTrimmedSurface',
+    # 'Geom_ConicalSurface',
+    # 'Geom_CylindricalSurface',
+    # 'Geom_Plane',
+    # 'Geom_SphericalSurface',
+    # 'Geom_ToroidalSurface',
+    # 'Geom_OffsetSurface'
+    # 'Geom_SurfaceOfLinearExtrusion',
+    # 'Geom_SurfaceOfRevolution',
+    # 'ShapeExtend_CompositeSurface',
+
+    # for c_step in step_dir:
+
+    display, start_display, add_menu, add_function_to_menu = init_display()
+
+    c_shape = step_read_ocaf(r'D:\document\DeepLearning\paper_draw\AttrVis_ABC\00028000\00028000_29d91d68447846af91317508_step_002.step')
+
+    all_faces = get_shape_faces(c_shape)
+
+    for cc_shape in all_faces:
+        cc_name = face_type_name(cc_shape)
+        if cc_name not in valid_name:
+
+            aligned_surface = BRep_Tool.Surface(cc_shape)
+            surf_adaptor = GeomAdaptor_Surface(aligned_surface)
+
+            cc_name_2 = face_type(surf_adaptor)
+
+            display.DisplayShape(cc_shape, update=True)
+
+            display.FitAll()
+
+            # 开启交互窗口
+            start_display()
+
+
+
+            print(cc_name + '-' + cc_name_2 + '-')
+
+            exit(0)
 
     pass
 

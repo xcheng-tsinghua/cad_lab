@@ -85,6 +85,22 @@ def create_subdirs(dir_path, sub_names: list):
         os.makedirs(os.path.join(dir_path, dir_name), exist_ok=True)
 
 
+def create_tree_like(source_dir, target_dir):
+    """
+    在target_dir下创建与source_dir相同的目录层级
+    :param source_dir:
+    :param target_dir:
+    :return:
+    """
+    for root, dirs, files in os.walk(source_dir):
+        # 计算目标文件夹中的对应路径
+        relative_path = os.path.relpath(root, source_dir)
+        target_path = os.path.join(target_dir, relative_path)
+
+        # 创建目标文件夹中的对应目录
+        os.makedirs(target_path, exist_ok=True)
+
+
 def get_allfiles(dir_path, suffix='txt', filename_only=False):
     '''
     获取dir_path下的全部文件路径
@@ -139,7 +155,12 @@ def del_file_by_suffix(dir_path, suffix='txt'):
     print('删除文件数：', delete_count)
 
 
-
-
+def remove_path_suffix(file_path):
+    """
+    删除文件的路径和后缀名
+    :param file_path:
+    :return:
+    """
+    return os.path.splitext(os.path.basename(file_path))[0]
 
 

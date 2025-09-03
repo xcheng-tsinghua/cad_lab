@@ -34,11 +34,35 @@ def vis_pcd(filepath, attr_show=None, show_normal=False, delimiter='\t'):
     o3d.visualization.draw_geometries([pcd], point_show_normal=show_normal)
 
 
+def vis_pcd_with_attr(xyz, norm=None, attr=None):
+    """
+    显示点云及属性
+    :param xyz: [n, 3] 点云
+    :param norm: [n, 3] 法线
+    :param attr: [n, ] 属性
+    :return:
+    """
+    pcd = o3d.geometry.PointCloud()
+    points = xyz[:, 0:3]
+    pcd.points = o3d.utility.Vector3dVector(points)
+
+    if norm is not None:
+        pcd.normals = o3d.utility.Vector3dVector(norm)
+
+    if attr is not None:
+        unique_labels = np.unique(attr)
+        num_labels = len(unique_labels)
+        colors = np.array([plt.cm.tab10(label / num_labels) for label in attr])[:, :3]  # Using tab10 colormap
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    o3d.visualization.draw_geometries([pcd], point_show_normal=True if norm is not None else False)
+
+
 def vis_step_cloud(file_name, n_points=2500, with_cst=False, attr_show=None, deflection=0.1, tmp_pc='tmp/tmp_pc.txt', color=None):
     '''
     将STEP文件转化为点云之后进行可视化
     '''
-    step_proc.step2pcd(file_name, n_points, tmp_pc, deflection, not with_cst)
+    step_proc.step2pcd(file_name, tmp_pc, n_points, deflection, not with_cst)
     vis_pcd_view(tmp_pc, attr_show, is_save_view=True, color=color)
 
     os.remove(tmp_pc)

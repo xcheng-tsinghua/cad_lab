@@ -1,6 +1,13 @@
+import os.path
+
+import numpy as np
+
 from utils import vis, utils
 from processor import step_proc, img_proc
 from tqdm import tqdm
+
+
+
 
 
 ## draw_para_net
@@ -69,12 +76,141 @@ from tqdm import tqdm
 # print(step_proc.assembly_filter(r'C:\Users\ChengXi\Desktop\gear-paper.STEP'))
 # print(step_proc.assembly_filter(r'D:\document\DeepLearning\tmp\STEPMillion_pack1\00003236\00003236_64bf0eb2d82b4b9aac59e530_step_000.step'))
 
+def filt():
+    target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend'
+    fils_all = utils.get_allfiles(target_dir)
+    for c_file in tqdm(fils_all):
+        c_pnd = np.loadtxt(c_file)
+        c_num = c_pnd.shape[0]
+
+        if c_num < 2000:
+            print(c_num, c_file)
+
+
+def source_to(source_dir=r'F:\document\deeplearning\Param20K_Extend', target_dir=r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend', log_file=r'C:\Users\ChengXi\Desktop\cstnet2\not_suff.txt'):
+    """
+    补救一些数量不够的数据
+    :param source_dir:
+    :param target_dir:
+    :param log_file:
+    :return:
+    """
+    with open(log_file, 'r', encoding='utf-8') as file:
+        lines = [line.strip() for line in file]
+
+    for c_idx, c_pcd in enumerate(lines):
+        print(f'{c_idx} / {len(lines)}')
+
+        c_step = c_pcd.replace(target_dir, source_dir)
+        c_step = os.path.splitext(c_step)[0] + '.STEP'
+
+        step_proc.step2pcd(c_step, c_pcd, 2000)
+
+
+def update_loc(pmt, loc, mad, trans):
+    """
+    更新几何体loc
+
+    参数:
+        pmt: [n, ] numpy数组，几何体类型 (0=plane, 1=cylinder, 其它=直接平移)
+        loc: [n, 3] numpy数组，原点到几何体的垂足
+        mad: [n, 3] numpy数组，几何体的法线/轴向（需为单位向量）
+        translation: (a, b, c) 平移向量
+    返回:
+        loc_updated: [n, 3] numpy数组，更新后的垂足
+    """
+    loc_updated = loc.copy()
+
+    # ---------- 平面 ----------
+    mask_plane = (pmt == 0)
+    if np.any(mask_plane):
+        n = mad[mask_plane]
+        proj = np.sum(trans * n, axis=1, keepdims=True) * n
+        loc_updated[mask_plane] = loc[mask_plane] + proj
+
+    # ---------- 圆柱 ----------
+    mask_cyl = (pmt == 1)
+    if np.any(mask_cyl):
+        d = mad[mask_cyl]
+        proj = np.sum(trans * d, axis=1, keepdims=True) * d
+        loc_updated[mask_cyl] = loc[mask_cyl] + (trans - proj)
+
+    # ---------- 其它 ----------
+    mask_other = ~(mask_plane | mask_cyl)
+    if np.any(mask_other):
+        loc_updated[mask_other] = loc[mask_other] + trans
+
+    return loc_updated
+
+
+def update_dim(pmt, dim, scale):
+    # 找到圆锥
+    mask_plane = (pmt == 2)
+    other_pmt = ~mask_plane
+    dim[other_pmt] = dim[other_pmt] * scale
+
+    return dim
+
+
+def single_load(pcd_file):
+    point_set = np.loadtxt(pcd_file)
+
+    xyz = point_set[:, :3]  # [n, 3]
+    pmt = point_set[:, 3].astype(np.int32)  # 基元类型 [n, ]
+    mad = point_set[:, 4:7]  # 主方向 [n, 3]
+    dim = point_set[:, 7]  # 主尺寸 [n, ]
+    nor = point_set[:, 8:11]  # 法线 [n, 3]
+    loc = point_set[:, 11:14]  # 主位置 [n, 3]
+    affil_idx = point_set[:, 14]  # 从属索引 [n, ]
+
+    # 质心平移到原点，三轴范围缩放到 [-1, 1]^3
+    move_dir = -np.mean(xyz, axis=0)
+    xyz = xyz + move_dir
+    scale = 1.0 / np.max(np.sqrt(np.sum(xyz ** 2, axis=1)), 0)
+    xyz = xyz * scale
+
+    # 平移缩放后，pmt, mad, nor 不变，dim 除圆锥外与原本进行相同比例缩放，loc 先平移，再缩放
+    dim = update_dim(pmt, dim, scale)
+    loc = update_loc(pmt, loc, mad, move_dir)
+    loc = loc * scale
+
+    return xyz, pmt, mad, dim, nor, loc, affil_idx
+
 
 if __name__ == '__main__':
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255, 255, 255), 4)
     # vis.vis_cls_log(r'C:\Users\ChengXi\Desktop\cstnet2\pnet2_geomloss.txt')
     # vis.vis_step_cloud(r'C:\Users\ChengXi\Desktop\apart.STEP', color=[38,40,46], n_points=700)
-    step_proc.test()
+    # step_proc.test()
+
+    # 生成测试的点云
+    # stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb.STEP'
+    # pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
+    # step_proc.step2pcd(stepfile, pcd_file, 2000)
+    #
+    # pnts_all = np.loadtxt(pcd_file)
+    #
+    # xyz = pnts_all[:, :3]
+    # pmt = pnts_all[:, 3]
+    # mad = pnts_all[:, 4:7]
+    # dim = pnts_all[:, 7]
+    # nor = pnts_all[:, 8:11]
+    # loc = pnts_all[:, 11:14]
+    # affil_idx = pnts_all[:, 14]
+    #
+    # xyz = np.vstack([xyz, loc])
+    # vis.vis_pcd_with_attr(xyz, nor, pmt)
+
+    step_proc.step2pcd_batched(r'F:\document\deeplearning\Param20K_Extend', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend', workers=8)
+
+    # filt()
+    # source_to()
+
+    # ashape_occ = step_proc.step_read_ocaf(stepfile)
+    # ashape_occ = step_proc.normalize_shape_to_unit_cube(ashape_occ)
+    # step_proc.shapeocc2step(ashape_occ, r'C:\Users\ChengXi\Desktop\cstnet2\comb---2.STEP')
+
+
 
     pass
 
