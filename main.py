@@ -99,12 +99,22 @@ def source_to(source_dir=r'F:\document\deeplearning\Param20K_Extend', target_dir
         lines = [line.strip() for line in file]
 
     for c_idx, c_pcd in enumerate(lines):
-        print(f'{c_idx} / {len(lines)}')
 
-        c_step = c_pcd.replace(target_dir, source_dir)
-        c_step = os.path.splitext(c_step)[0] + '.STEP'
+        over_rate = 0.025
+        while True:
 
-        step_proc.step2pcd(c_step, c_pcd, 2000)
+            print(f'{c_idx} / {len(lines)}')
+
+            c_step = c_pcd.replace(target_dir, source_dir)
+            c_step = os.path.splitext(c_step)[0] + '.STEP'
+
+            real_saved = step_proc.step2pcd(c_step, c_pcd, 2000, print_log=False, over_rate=over_rate)
+
+            if real_saved >= 2000:
+                break
+            else:
+                over_rate += 0.1
+                print(f'point saved: {real_saved}, resample over rate: {over_rate}')
 
 
 def update_loc(pmt, loc, mad, trans):
@@ -184,24 +194,24 @@ if __name__ == '__main__':
     # step_proc.test()
 
     # 生成测试的点云
-    # stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb.STEP'
-    # pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
-    # step_proc.step2pcd(stepfile, pcd_file, 2000)
-    #
-    # pnts_all = np.loadtxt(pcd_file)
-    #
-    # xyz = pnts_all[:, :3]
-    # pmt = pnts_all[:, 3]
-    # mad = pnts_all[:, 4:7]
-    # dim = pnts_all[:, 7]
-    # nor = pnts_all[:, 8:11]
-    # loc = pnts_all[:, 11:14]
-    # affil_idx = pnts_all[:, 14]
+    stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb.STEP'
+    pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
+    step_proc.step2pcd(stepfile, pcd_file, 2000)
+
+    pnts_all = np.loadtxt(pcd_file)
+
+    xyz = pnts_all[:, :3]
+    pmt = pnts_all[:, 3]
+    mad = pnts_all[:, 4:7]
+    dim = pnts_all[:, 7]
+    nor = pnts_all[:, 8:11]
+    loc = pnts_all[:, 11:14]
+    affil_idx = pnts_all[:, 14]
     #
     # xyz = np.vstack([xyz, loc])
     # vis.vis_pcd_with_attr(xyz, nor, pmt)
 
-    step_proc.step2pcd_batched(r'F:\document\deeplearning\Param20K_Extend', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend', workers=8)
+    # step_proc.step2pcd_batched(r'F:\document\deeplearning\Param20K_Extend', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend', workers=8)
 
     # filt()
     # source_to()
@@ -209,6 +219,8 @@ if __name__ == '__main__':
     # ashape_occ = step_proc.step_read_ocaf(stepfile)
     # ashape_occ = step_proc.normalize_shape_to_unit_cube(ashape_occ)
     # step_proc.shapeocc2step(ashape_occ, r'C:\Users\ChengXi\Desktop\cstnet2\comb---2.STEP')
+
+
 
 
 

@@ -191,14 +191,33 @@ class Point3DForDataSet(gp_Pnt):
                         f'{self.loc.X()} {self.loc.Y()} {self.loc.Z()} ' +  # 主位置
                         f'{self.prim_idx}\n')  # 基元索引
         else:
-            save_str = (f'{self.dir.X()} {self.dir.Y()} {self.dir.Z()} ' +  # 主方向
-                        f'{self.pmt} ' +  # 基元类型
+            save_str = (f'{self.pmt} ' +  # 基元类型
+                        f'{self.dir.X()} {self.dir.Y()} {self.dir.Z()} ' +  # 主方向
                         f'{self.dim} ' +  # 主尺寸
                         f'{self.nor.X()} {self.nor.Y()} {self.nor.Z()} ' +  # 法线
                         f'{self.loc.X()} {self.loc.Y()} {self.loc.Z()} ' +  # 主位置
                         f'{self.prim_idx}\n')  # 基元索引
 
         return save_str
+
+    def get_save_data(self, is_contain_xyz=True):
+        if is_contain_xyz:
+            save_data = (self.X(), self.Y(), self.Z(),  # 坐标
+                         self.pmt,  # 基元类型
+                         self.dir.X(), self.dir.Y(), self.dir.Z(),  # 主方向
+                         self.dim,  # 主尺寸
+                         self.nor.X(), self.nor.Y(), self.nor.Z(),  # 法线
+                         self.loc.X(), self.loc.Y(), self.loc.Z(),  # 主位置
+                         self.prim_idx)  # 基元索引
+        else:
+            save_data = (self.pmt,  # 基元类型
+                         self.dir.X(), self.dir.Y(), self.dir.Z(),  # 主方向
+                         self.dim,  # 主尺寸
+                         self.nor.X(), self.nor.Y(), self.nor.Z(),  # 法线
+                         self.loc.X(), self.loc.Y(), self.loc.Z(),  # 主位置
+                         self.prim_idx)  # 基元索引
+
+        return save_data
 
 
 def normalize_shape_to_unit_cube(shape):
@@ -587,7 +606,7 @@ def get_logger(name: str = 'log'):
     return logger
 
 
-def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, using_tqdm=True, print_log=True, is_normalize=True):
+def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, using_tqdm=True, print_log=True, is_normalize=True, over_rate=0.025):
     """
     将step模型转化为带约束的点云，需要先转化为 mesh
     :param step_path:
@@ -598,6 +617,7 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
     :param using_tqdm: 是否使用进度条
     :param print_log:
     :param is_normalize:
+    :param over_rate: 初始采样点数超过指定点数的比例
     :return:
     """
 
@@ -618,7 +638,7 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
 
         if n_itera >= 100:
             raise ValueError('arrive max iteration, point number can not satisfy')
-        elif n_real_sampled >= n_points * 1.025:
+        elif n_real_sampled >= n_points * (1.0 + over_rate):
             break
         else:
             n_itera += 1
@@ -626,8 +646,10 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
 
     os.remove(tmp_stl)
 
+    n_real_saved = 0
     if xyz_only:
         np.savetxt(save_path, vertex_matrix, fmt='%.6f')
+        n_real_saved = vertex_matrix.shape[0]
 
     else:
         # 真实生成的点数，使用poisson_disk_sample得到的点数一般大于指定点数
@@ -648,6 +670,7 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
                     if face_aligned is not None:
                         current_datapoint = Point3DForDataSet(current_point, face_aligned, idx)
                         file_write.writelines(current_datapoint.get_save_str())
+                        n_real_saved += 1
 
                     elif print_log:
                         print(f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
@@ -656,6 +679,8 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
                     if print_log:
                         print(
                             f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
+
+    return n_real_saved
 
 
 def step2pcd_faceseg(step_path, n_points, save_path, deflection=0.1):
@@ -895,6 +920,9 @@ def step2pcd_batched(source_dir, target_dir, n_points=2000, deflection=0.1, xyz_
 
     utils.create_tree_like(source_dir, target_dir)
     files_all = utils.get_allfiles(source_dir, 'step')
+
+    # 获取全部点云保存路径
+
 
     work_func = partial(
         step2pcd_batched_multi_processing_wrapper,
