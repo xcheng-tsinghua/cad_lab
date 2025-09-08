@@ -34,6 +34,19 @@ def vis_pcd(filepath, attr_show=None, show_normal=False, delimiter='\t'):
     o3d.visualization.draw_geometries([pcd], point_show_normal=show_normal)
 
 
+def vis_pcd_plt(points1, points2=None):
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_box_aspect([1, 1, 1])
+
+    ax.scatter(points1[:, 0], points1[:, 1], points1[:, 2], color='black', alpha=0.2)
+
+    if points2 is not None:
+        ax.scatter(points2[:, 0], points2[:, 1], points2[:, 2], color='red')
+
+    plt.show()
+
+
 def vis_pcd_with_attr(xyz, norm=None, attr=None):
     """
     显示点云及属性

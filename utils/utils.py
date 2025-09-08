@@ -104,6 +104,7 @@ def create_tree_like(source_dir, target_dir):
 def get_allfiles(dir_path, suffix='txt', filename_only=False):
     '''
     获取dir_path下的全部文件路径
+    suffix = None: 获取所有文件，不筛选后缀
     '''
     filepath_all = []
 
@@ -113,8 +114,13 @@ def get_allfiles(dir_path, suffix='txt', filename_only=False):
         else:
             return False
 
+    def always_true(_):
+        return True
+
     if suffix == 'stp' or suffix == 'step' or suffix == 'STEP':
         suffix_judge = is_suffix_step
+    elif suffix is None:
+        suffix_judge = always_true
     else:
         suffix_judge = other_judge
 

@@ -200,22 +200,14 @@ class Point3DForDataSet(gp_Pnt):
 
         return save_str
 
-    def get_save_data(self, is_contain_xyz=True):
-        if is_contain_xyz:
-            save_data = (self.X(), self.Y(), self.Z(),  # 坐标
-                         self.pmt,  # 基元类型
-                         self.dir.X(), self.dir.Y(), self.dir.Z(),  # 主方向
-                         self.dim,  # 主尺寸
-                         self.nor.X(), self.nor.Y(), self.nor.Z(),  # 法线
-                         self.loc.X(), self.loc.Y(), self.loc.Z(),  # 主位置
-                         self.prim_idx)  # 基元索引
-        else:
-            save_data = (self.pmt,  # 基元类型
-                         self.dir.X(), self.dir.Y(), self.dir.Z(),  # 主方向
-                         self.dim,  # 主尺寸
-                         self.nor.X(), self.nor.Y(), self.nor.Z(),  # 法线
-                         self.loc.X(), self.loc.Y(), self.loc.Z(),  # 主位置
-                         self.prim_idx)  # 基元索引
+    def get_save_data(self):
+        save_data = (self.X(), self.Y(), self.Z(),  # 坐标
+                     self.pmt,  # 基元类型
+                     self.dir.X(), self.dir.Y(), self.dir.Z(),  # 主方向
+                     self.dim,  # 主尺寸
+                     self.nor.X(), self.nor.Y(), self.nor.Z(),  # 法线
+                     self.loc.X(), self.loc.Y(), self.loc.Z(),  # 主位置
+                     self.prim_idx)  # 基元索引
 
         return save_data
 
@@ -242,7 +234,7 @@ def normalize_shape_to_unit_cube(shape):
 
     # Step 3: 缩放到 [-1,1]^3
     dx, dy, dz = xmax - xmin, ymax - ymin, zmax - zmin
-    scale = 1.0 / max(dx, dy, dz)
+    scale = 2.0 / max(dx, dy, dz)
     trsf_scale = gp_Trsf()
     trsf_scale.SetScale(gp_Pnt(0, 0, 0), scale)
     shape_normalized = BRepBuilderAPI_Transform(shape_centered, trsf_scale, True).Shape()
@@ -564,17 +556,20 @@ def normal_at(point: gp_Pnt, face: TopoDS_Face):
         raise ValueError('Can not perform projection')
 
 
-def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt, prec=0.1):
+def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt):
     """
-    获取模型中该点所在面
+    找到模型中，距该点最近的面
     :param model_occ: 三维模型
     :param point: 目标点
-    :param prec: 精度，可设为将 B-Rep 转化为 Mesh 时的误差
     :return: 目标点所在面
     """
     explorer = TopExp_Explorer(model_occ, TopAbs_FACE)
 
     c_idx = -1
+
+    aligned_face = None
+    aligned_face_index = None
+    aligned_face_dist = 999999.0
     while explorer.More():
         face = explorer.Current()
         face = topods.Face(face)
@@ -583,14 +578,20 @@ def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt, prec=0.1):
 
         try:
             current_dist = dist_point2shape(point, face)
+
+            if current_dist < aligned_face_dist:
+                aligned_face_dist = current_dist
+                aligned_face_index = c_idx
+                aligned_face = face
+
         except:
             print('无法计算点与当前面的距离，跳过当前面')
             continue
 
-        if current_dist <= prec + precision.Confusion():
-            return face, c_idx
+        # if current_dist <= prec + precision.Confusion():
+        #     return face, c_idx
 
-    return None, None
+    return aligned_face, aligned_face_index, aligned_face_dist
 
 
 def get_logger(name: str = 'log'):
@@ -606,7 +607,7 @@ def get_logger(name: str = 'log'):
     return logger
 
 
-def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, using_tqdm=True, print_log=True, is_normalize=True, over_rate=0.025):
+def step2pcd(step_path, save_path, n_points=2000, deflection=1e-4, xyz_only=False, using_tqdm=True, print_log=True, is_normalize=True):
     """
     将step模型转化为带约束的点云，需要先转化为 mesh
     :param step_path:
@@ -617,13 +618,13 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
     :param using_tqdm: 是否使用进度条
     :param print_log:
     :param is_normalize:
-    :param over_rate: 初始采样点数超过指定点数的比例
     :return:
     """
 
     # 生成 mesh
     n_itera = 0
-    n_csample = n_points
+    # n_csample = int(n_points * 0.5)
+    n_sample = n_points
 
     shape_occ = step_read_ocaf(step_path)
     if is_normalize:
@@ -632,24 +633,63 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
     tmp_stl = f'tmp/{uuid.uuid4()}.stl'  # 生成不重复的临时文件
     shapeocc2stl(shape_occ, tmp_stl, deflection)
 
+    last_vertex = None
+    inc_rate = 0.05
     while True:
-        vertex_matrix = mesh_proc.get_points_mslab(tmp_stl, n_csample)
+        vertex_matrix = mesh_proc.get_points_mslab(tmp_stl, n_sample)
         n_real_sampled = vertex_matrix.shape[0]
+
+        if last_vertex is None:
+            last_vertex = vertex_matrix
+            continue
+
+        n_last_sampled = last_vertex.shape[0]
+
+        # 上次采样点数等于指定点数
+        if n_last_sampled == n_points:
+            vertex_matrix = last_vertex
+            break
+
+        # 本次采样点数等于指定点数
+        elif n_real_sampled == n_points:
+            break
+
+        # 目标点数位于本次采样点数和上次采样点数之间
+        elif n_last_sampled < n_points < n_real_sampled or n_last_sampled > n_points > n_real_sampled:
+            if n_last_sampled > n_real_sampled:
+                vertex_matrix = last_vertex
+            break
+
+        # 本次采样点数和上次采样点数均大于指定点数
+        elif min(n_last_sampled, n_real_sampled) > n_points:
+            n_sample = int(n_sample * (1.0 - inc_rate))
+
+        # 本次采样点数和上次采样点数均小于指定点数
+        elif max(n_last_sampled, n_real_sampled) < n_points:
+            n_sample = int(n_sample * (1.0 + inc_rate))
+
+        else:
+            raise ValueError(f'unexpected value: last: {n_last_sampled}, current: {n_real_sampled}, target: {n_points}')
+
+        n_itera += 1
+        last_vertex = vertex_matrix
 
         if n_itera >= 100:
             raise ValueError('arrive max iteration, point number can not satisfy')
-        elif n_real_sampled >= n_points * (1.0 + over_rate):
-            break
-        else:
-            n_itera += 1
-            n_csample = int(n_csample * 1.05)
+
+
+        # if n_itera >= 100:
+        #     raise ValueError('arrive max iteration, point number can not satisfy')
+        # elif n_real_sampled >= n_points:
+        #     break
+        # else:
+        #     n_itera += 1
+        #     n_sample = int(n_sample * 1.05)
 
     os.remove(tmp_stl)
 
-    n_real_saved = 0
     if xyz_only:
         np.savetxt(save_path, vertex_matrix, fmt='%.6f')
-        n_real_saved = vertex_matrix.shape[0]
 
     else:
         # 真实生成的点数，使用poisson_disk_sample得到的点数一般大于指定点数
@@ -665,12 +705,11 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
                                            float(vertex_matrix[i, 1]),
                                            float(vertex_matrix[i, 2]))
 
-                    face_aligned, idx = get_point_aligned_face(shape_occ, current_point, deflection)
+                    face_aligned, idx, min_dist = get_point_aligned_face(shape_occ, current_point)
 
                     if face_aligned is not None:
                         current_datapoint = Point3DForDataSet(current_point, face_aligned, idx)
                         file_write.writelines(current_datapoint.get_save_str())
-                        n_real_saved += 1
 
                     elif print_log:
                         print(f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
@@ -680,7 +719,9 @@ def step2pcd(step_path, save_path, n_points, deflection=0.1, xyz_only=False, usi
                         print(
                             f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
 
-    return n_real_saved
+    n_real_sampled = vertex_matrix.shape[0]
+    # print(f'当前存储点数: {n_real_sampled}')
+    return n_real_sampled
 
 
 def step2pcd_faceseg(step_path, n_points, save_path, deflection=0.1):
@@ -890,24 +931,32 @@ def step2pcd_abc(dir_path, n_points=2650, is_load_progress=True, xyz_only=False,
     save_finish2json(trans_progress)
 
 
-def step2pcd_batched_multi_processing_wrapper(c_step, source_dir, target_dir, n_points, deflection, xyz_only):
+def step2pcd_batched_multi_processing_wrapper(c_step, source_dir, target_dir, n_points, deflection):
+    """
+    辅助进行多进程处理函数
+    :param c_step:
+    :param source_dir:
+    :param target_dir:
+    :param n_points:
+    :param deflection:
+    :return:
+    """
     pcd_path = c_step.replace(source_dir, target_dir)
     pcd_path = os.path.splitext(pcd_path)[0] + '.txt'
 
     try:
-        step2pcd(c_step, pcd_path, n_points, deflection, xyz_only, False, False, True)
+        step2pcd(c_step, pcd_path, n_points, deflection, False, False, False, True)
     except:
         print(f'cannot convert this STEP file: {c_step}.')
 
 
-def step2pcd_batched(source_dir, target_dir, n_points=2000, deflection=0.1, xyz_only=False, workers=4):
+def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers):
     """
     将 source_dir 下的 STEP 转化为 target_dir 下的点云，两者具备相同的目录层级结构
     :param source_dir:
     :param target_dir:
     :param n_points:
     :param deflection:
-    :param xyz_only:
     :param workers: 进程数
     :return:
     """
@@ -915,22 +964,41 @@ def step2pcd_batched(source_dir, target_dir, n_points=2000, deflection=0.1, xyz_
     os.makedirs(target_dir, exist_ok=True)
 
     # 清空target_dir
+    n_files_exist = len(utils.get_allfiles(target_dir, None))
+    response = input(f'target folder exist {n_files_exist} files, clear this folder? (y/n) ')
+    if response != 'y':
+        exit()
+
     print('clear dir: ', target_dir)
     shutil.rmtree(target_dir)
 
+    print('create tree like:', source_dir)
     utils.create_tree_like(source_dir, target_dir)
     files_all = utils.get_allfiles(source_dir, 'step')
 
     # 获取全部点云保存路径
+    # save_all = []
+    # for c_file in files_all:
+    #     c_file = c_file.replace(source_dir, target_dir)
+    #     c_save = os.path.splitext(c_file)[0] + '.txt'
+    #     save_all.append(c_save)
 
+    # work_func = partial(
+    #     step2pcd,
+    #     n_points=n_points,
+    #     deflection=deflection,
+    #     xyz_only=False,
+    #     using_tqdm=False,
+    #     print_log=False,
+    #     is_normalize=True
+    # )
 
     work_func = partial(
         step2pcd_batched_multi_processing_wrapper,
         source_dir=source_dir,
         target_dir=target_dir,
         n_points=n_points,
-        deflection=deflection,
-        xyz_only=xyz_only
+        deflection=deflection
     )
 
     with Pool(processes=workers) as pool:

@@ -5,7 +5,8 @@ import numpy as np
 from utils import vis, utils
 from processor import step_proc, img_proc
 from tqdm import tqdm
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 
 
@@ -76,7 +77,27 @@ from tqdm import tqdm
 # print(step_proc.assembly_filter(r'C:\Users\ChengXi\Desktop\gear-paper.STEP'))
 # print(step_proc.assembly_filter(r'D:\document\DeepLearning\tmp\STEPMillion_pack1\00003236\00003236_64bf0eb2d82b4b9aac59e530_step_000.step'))
 
-def filt():
+
+def is_all_step_transed(source_dir=r'F:\document\deeplearning\Param20K_Extend', target_dir=r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend'):
+    """
+    判断是否全部的step文件都进行了转换
+    :return:
+    """
+    all_step = utils.get_allfiles(source_dir, 'STEP')
+
+    for c_step in tqdm(all_step):
+        pcd_path = c_step.replace(source_dir, target_dir)
+        pcd_path = os.path.splitext(pcd_path)[0] + '.txt'
+
+        if not os.path.isfile(pcd_path):
+            print(c_step)
+
+
+def is_npnt_sufficient():
+    """
+    判断点数是否满足要求
+    :return:
+    """
     target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend'
     fils_all = utils.get_allfiles(target_dir)
     for c_file in tqdm(fils_all):
@@ -187,6 +208,39 @@ def single_load(pcd_file):
     return xyz, pmt, mad, dim, nor, loc, affil_idx
 
 
+def process_cannot_convert():
+    log_file = r'C:\Users\ChengXi\Desktop\cstnet2\not_trans.txt'
+    source_dir = r'F:\document\deeplearning\Param20K_Extend'
+    target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend'
+
+    fail_files = []
+
+    with open(log_file, 'r', encoding='utf-8') as file:
+        lines = [line.strip() for line in file]
+
+    for c_line in lines:
+        if 'cannot convert this STEP file:' in c_line:
+            c_fail_step = c_line.split('STEP file: ')[1][:-1]
+            fail_files.append(c_fail_step)
+            print(c_fail_step)
+
+    for idx, c_step in enumerate(fail_files):
+        # if idx <= 18:
+        #     continue
+
+        pcd_path = c_step.replace(source_dir, target_dir)
+        pcd_path = os.path.splitext(pcd_path)[0] + '.txt'
+
+        print(f'[{idx} / {len(fail_files)}] 当前处理：{c_step}')
+        step_proc.step2pcd(c_step, pcd_path, 2000, 1e-4)
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255, 255, 255), 4)
     # vis.vis_cls_log(r'C:\Users\ChengXi\Desktop\cstnet2\pnet2_geomloss.txt')
@@ -194,35 +248,39 @@ if __name__ == '__main__':
     # step_proc.test()
 
     # 生成测试的点云
-    stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb.STEP'
-    pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
-    step_proc.step2pcd(stepfile, pcd_file, 2000)
-
-    pnts_all = np.loadtxt(pcd_file)
-
-    xyz = pnts_all[:, :3]
-    pmt = pnts_all[:, 3]
-    mad = pnts_all[:, 4:7]
-    dim = pnts_all[:, 7]
-    nor = pnts_all[:, 8:11]
-    loc = pnts_all[:, 11:14]
-    affil_idx = pnts_all[:, 14]
+    # stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb.STEP'
+    # # stepfile = r'F:\document\deeplearning\Param20K_Extend\test\bearing\01447962.STEP'
+    # pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
     #
-    # xyz = np.vstack([xyz, loc])
-    # vis.vis_pcd_with_attr(xyz, nor, pmt)
+    # step_proc.step2pcd(stepfile, pcd_file, 2000)
+    #
+    # # pcd_file = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\test\bearing\00042353.txt'
+    # pnts_all = np.loadtxt(pcd_file)
+    #
+    # xyz = pnts_all[:, :3]
+    # pmt = pnts_all[:, 3].astype(np.int32)
+    # mad = pnts_all[:, 4:7]
+    # dim = pnts_all[:, 7]
+    # nor = pnts_all[:, 8:11]
+    # loc = pnts_all[:, 11:14]
+    # affil_idx = pnts_all[:, 14].astype(np.int32)
+    #
+    # print(f'xmax {xyz[:, 0].max()}, xmin {xyz[:, 0].min()}, ymax {xyz[:, 1].max()}, ymin {xyz[:, 1].min()}, zmax {xyz[:, 2].max()}, zmin {xyz[:, 2].min()}')
+    #
+    # vis.vis_pcd_with_attr(xyz, None, pmt)
+    # vis.vis_pcd_plt(xyz, loc)
 
-    # step_proc.step2pcd_batched(r'F:\document\deeplearning\Param20K_Extend', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend', workers=8)
 
-    # filt()
+    # is_npnt_sufficient()
+    is_all_step_transed()
     # source_to()
 
     # ashape_occ = step_proc.step_read_ocaf(stepfile)
     # ashape_occ = step_proc.normalize_shape_to_unit_cube(ashape_occ)
     # step_proc.shapeocc2step(ashape_occ, r'C:\Users\ChengXi\Desktop\cstnet2\comb---2.STEP')
 
-
-
-
+    # step_proc.step2pcd_batched(r'F:\document\deeplearning\Param20K_Extend', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend', 2000, 1e-4, 8)
+    # process_cannot_convert()
 
     pass
 
