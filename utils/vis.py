@@ -44,6 +44,8 @@ def vis_pcd_plt(points1, points2=None):
     if points2 is not None:
         ax.scatter(points2[:, 0], points2[:, 1], points2[:, 2], color='red')
 
+    ax.scatter(0, 0, 0, color='blue')
+
     plt.show()
 
 

@@ -235,10 +235,56 @@ def process_cannot_convert():
         step_proc.step2pcd(c_step, pcd_path, 2000, 1e-4)
 
 
+def del_except(target_dir=r'F:\document\deeplearning\Param20K_Extend', suffix='.STEP'):
+    files_all = utils.get_allfiles(target_dir, None)
+
+    for c_file in tqdm(files_all):
+        c_suffix = os.path.splitext(c_file)[1]
+        if c_suffix != suffix:
+            os.remove(c_file)
 
 
+def divided_to_sketch_and_photo():
+    source_dir = r'D:\document\DeepLearning\DataSet\草图项目\sketch_and_shortcut'
+    target_dir = r'D:\document\DeepLearning\DataSet\草图项目\retrieval_cad'
+
+    # 获取全部类别
 
 
+def vis_pcd_gen():
+    # 生成测试的点云
+    stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb2.STEP'
+    # stepfile = r'F:\document\deeplearning\Param20K_Extend\test\bearing\01447962.STEP'
+    pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
+    #
+    step_proc.step2pcd(stepfile, pcd_file, 2000, is_normalize=False)
+    #
+    # pcd_file = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\test\bearing\00042353.txt'
+    pnts_all = np.loadtxt(pcd_file)
+    #
+    xyz = pnts_all[:, :3]
+    pmt = pnts_all[:, 3].astype(np.int32)
+    mad = pnts_all[:, 4:7]
+    dim = pnts_all[:, 7]
+    nor = pnts_all[:, 8:11]
+    loc = pnts_all[:, 11:14]
+    affil_idx = pnts_all[:, 14].astype(np.int32)
+
+    cone_mask = (pmt == 2)
+    if cone_mask.sum() != 0:
+        cone_mad = mad[cone_mask]
+        cone_apex = loc[cone_mask]
+
+        t = - np.einsum('ij,ij->i', cone_mad, cone_apex)
+
+        # 垂足坐标
+        perpendicular_foot = cone_apex + t[:, None] * cone_mad
+        loc[cone_mask] = perpendicular_foot
+
+    print(f'xmax {xyz[:, 0].max()}, xmin {xyz[:, 0].min()}, ymax {xyz[:, 1].max()}, ymin {xyz[:, 1].min()}, zmax {xyz[:, 2].max()}, zmin {xyz[:, 2].min()}')
+
+    # vis.vis_pcd_with_attr(xyz, None, pmt)
+    vis.vis_pcd_plt(xyz, loc)
 
 
 if __name__ == '__main__':
@@ -247,40 +293,20 @@ if __name__ == '__main__':
     # vis.vis_step_cloud(r'C:\Users\ChengXi\Desktop\apart.STEP', color=[38,40,46], n_points=700)
     # step_proc.test()
 
-    # 生成测试的点云
-    # stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb.STEP'
-    # # stepfile = r'F:\document\deeplearning\Param20K_Extend\test\bearing\01447962.STEP'
-    # pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
-    #
-    # step_proc.step2pcd(stepfile, pcd_file, 2000)
-    #
-    # # pcd_file = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\test\bearing\00042353.txt'
-    # pnts_all = np.loadtxt(pcd_file)
-    #
-    # xyz = pnts_all[:, :3]
-    # pmt = pnts_all[:, 3].astype(np.int32)
-    # mad = pnts_all[:, 4:7]
-    # dim = pnts_all[:, 7]
-    # nor = pnts_all[:, 8:11]
-    # loc = pnts_all[:, 11:14]
-    # affil_idx = pnts_all[:, 14].astype(np.int32)
-    #
-    # print(f'xmax {xyz[:, 0].max()}, xmin {xyz[:, 0].min()}, ymax {xyz[:, 1].max()}, ymin {xyz[:, 1].min()}, zmax {xyz[:, 2].max()}, zmin {xyz[:, 2].min()}')
-    #
-    # vis.vis_pcd_with_attr(xyz, None, pmt)
-    # vis.vis_pcd_plt(xyz, loc)
-
-
     # is_npnt_sufficient()
-    is_all_step_transed()
+    # is_all_step_transed()
     # source_to()
 
     # ashape_occ = step_proc.step_read_ocaf(stepfile)
     # ashape_occ = step_proc.normalize_shape_to_unit_cube(ashape_occ)
     # step_proc.shapeocc2step(ashape_occ, r'C:\Users\ChengXi\Desktop\cstnet2\comb---2.STEP')
 
-    # step_proc.step2pcd_batched(r'F:\document\deeplearning\Param20K_Extend', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend', 2000, 1e-4, 8)
+    # step_proc.step2pcd_batched(r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2', 2000, 1e-4, 8)
     # process_cannot_convert()
+    # print(os.path.splitext(stepfile))
+    # del_except()
+
+    img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\中期', remove_pixel=(255,255,255))
 
     pass
 

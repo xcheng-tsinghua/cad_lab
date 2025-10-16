@@ -36,6 +36,7 @@ from OCC.Core.Bnd import Bnd_Box
 from OCC.Core.gp import gp_Trsf, gp_Vec, gp_Pnt
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_Transform
 from OCC.Core.STEPControl import STEPControl_Writer, STEPControl_AsIs
+from OCC.Extend.DataExchange import write_step_file
 
 # others
 import os
@@ -151,17 +152,15 @@ class Point3DForDataSet(gp_Pnt):
             cyloc = axis.Location()  # 轴线上一点 (gp_Pnt)
             cydir = axis.Direction()  # 轴线方向 (gp_Dir)
 
-            # 投影长度 (点积)
-            t = - gp_Vec(cyloc.XYZ()).Dot(gp_Vec(cydir))
-
-            # 垂足坐标
-            perpendicular_foot = gp_Pnt(cyloc.XYZ() + cydir.XYZ().Multiplied(t))
+            perpendicular_foot = prep_foot(cyloc, cydir)
             self.loc = perpendicular_foot
 
         elif self.type_name == 'cone':
             cone_surf = self.surf_adaptor.Cone()
             self.dim = cone_surf.SemiAngle()
             self.loc = cone_surf.Apex()
+            # perpendicular_foot = prep_foot(cone_surf.Axis().Location(), cone_surf.Axis().Direction())
+            # self.loc = perpendicular_foot
 
         elif self.type_name == 'sphere':
             sph_surf = self.surf_adaptor.Sphere()
@@ -210,6 +209,21 @@ class Point3DForDataSet(gp_Pnt):
                      self.prim_idx)  # 基元索引
 
         return save_data
+
+
+def prep_foot(loc, direction):
+    """
+    计算原点到 经过loc点，以direction为方向的空间直线 的垂足坐标
+    :param loc:
+    :param direction:
+    :return:
+    """
+    # 投影长度 (点积)
+    t = - gp_Vec(loc.XYZ()).Dot(gp_Vec(direction))
+
+    # 垂足坐标
+    perpendicular_foot = gp_Pnt(loc.XYZ() + direction.XYZ().Multiplied(t))
+    return perpendicular_foot
 
 
 def normalize_shape_to_unit_cube(shape):
@@ -960,8 +974,6 @@ def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers):
     :param workers: 进程数
     :return:
     """
-    # 先在 target_path 下创建相同的目录结构
-    os.makedirs(target_dir, exist_ok=True)
 
     # 清空target_dir
     n_files_exist = len(utils.get_allfiles(target_dir, None))
@@ -972,6 +984,7 @@ def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers):
     print('clear dir: ', target_dir)
     shutil.rmtree(target_dir)
 
+    # 先在 target_path 下创建相同的目录结构
     print('create tree like:', source_dir)
     utils.create_tree_like(source_dir, target_dir)
     files_all = utils.get_allfiles(source_dir, 'step')
