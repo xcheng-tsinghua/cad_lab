@@ -7,8 +7,7 @@ from processor import step_proc, img_proc
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-
-
+import upper_funcs
 
 
 ## draw_para_net
@@ -253,7 +252,7 @@ def divided_to_sketch_and_photo():
 
 def vis_pcd_gen():
     # 生成测试的点云
-    stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\comb2.STEP'
+    stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\cube_div.STEP'
     # stepfile = r'F:\document\deeplearning\Param20K_Extend\test\bearing\01447962.STEP'
     pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
     #
@@ -283,8 +282,8 @@ def vis_pcd_gen():
 
     print(f'xmax {xyz[:, 0].max()}, xmin {xyz[:, 0].min()}, ymax {xyz[:, 1].max()}, ymin {xyz[:, 1].min()}, zmax {xyz[:, 2].max()}, zmin {xyz[:, 2].min()}')
 
-    # vis.vis_pcd_with_attr(xyz, None, pmt)
-    vis.vis_pcd_plt(xyz, loc)
+    vis.vis_pcd_with_attr(xyz, None, affil_idx)
+    # vis.vis_pcd_plt(xyz, loc)
 
 
 if __name__ == '__main__':
@@ -306,7 +305,9 @@ if __name__ == '__main__':
     # print(os.path.splitext(stepfile))
     # del_except()
 
-    img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\中期', remove_pixel=(255,255,255))
+    upper_funcs.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', remove_pixel=(255,255,255))
+    # vis_pcd_gen()
+    # vis.vis_pcd(r'D:\document\DeepLearning\DataSet\MCB_PointCloud\MCB_A\train\Helical geared motors\00025702.txt', delimiter=' ')
 
     pass
 

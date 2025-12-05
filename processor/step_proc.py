@@ -16,8 +16,10 @@ from OCC.Core.Precision import precision
 from OCC.Core.GProp import GProp_PGProps, GProp_GProps
 from OCC.Core.BRepGProp import brepgprop
 from OCC.Core.BRep import BRep_Tool
+from OCC.Core.TopExp import topexp
+from OCC.Core.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Common
-from OCC.Core.Geom import Geom_ConicalSurface, Geom_Plane, Geom_CylindricalSurface, Geom_Curve, Geom_SphericalSurface
+from OCC.Core.Geom import Geom_ConicalSurface, Geom_Plane, Geom_CylindricalSurface, Geom_Curve, Geom_SphericalSurface, Geom_Surface
 from OCC.Core.TDocStd import TDocStd_Document
 from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
 from OCC.Core.STEPCAFControl import STEPCAFControl_Reader
@@ -62,9 +64,10 @@ from processor import mesh_proc
 from utils import utils
 
 
-class Point3DForDataSet(gp_Pnt):
+class PointOfParamPCD(gp_Pnt):
     """
-    使用类处理点的额外属性
+    为参数化点云第二版设计的从step提取约束表达的类
+    每个对象代表单个点
     """
     def __init__(self, pnt_loc: gp_Pnt, aligned_face: TopoDS_Face, prim_idx: int):
         super().__init__(pnt_loc.XYZ())
@@ -274,12 +277,25 @@ def get_shape_faces(model_occ: TopoDS_Shape):
     return face_all
 
 
-def face_type(adaptor: GeomAdaptor_Surface):
+def face_type(adaptor):
     """
     获取 occt 面的类型
     :param adaptor:
     :return: ['plane', 'cylinder', 'cone', 'sphere', 'freeform']
     """
+
+    if isinstance(adaptor, TopoDS_Face):
+        adaptor = BRep_Tool.Surface(adaptor)
+        adaptor = GeomAdaptor_Surface(adaptor)
+
+    elif isinstance(adaptor, Geom_Surface):
+        adaptor = GeomAdaptor_Surface(adaptor)
+
+    elif isinstance(adaptor, GeomAdaptor_Surface):
+        pass
+
+    else:
+        raise TypeError('not supported face type')
 
     try:
         adaptor.Plane()
@@ -570,6 +586,141 @@ def normal_at(point: gp_Pnt, face: TopoDS_Face):
         raise ValueError('Can not perform projection')
 
 
+def get_edge_aligned_face(edge_occ, shape_occ):
+    """
+    找到edge对应的face
+    :param edge_occ:
+    :param shape_occ:
+    :return:
+    """
+    edge_face_map = TopTools_IndexedDataMapOfShapeListOfShape()
+    topexp.MapShapesAndAncestors(shape_occ, TopAbs_EDGE, TopAbs_FACE, edge_face_map)
+
+    # 查询该 edge 对应的 face 列表
+    if edge_face_map.Contains(edge_occ):
+        faces = edge_face_map.FindFromKey(edge_occ)
+
+        face1 = faces.First()
+        face2 = faces.Last()
+
+        return face1, face2
+
+    else:
+        print("该 edge 不属于任何 face。")
+        return None
+
+
+def is_face_geom_equal(face1, face2, tol=1e-6):
+    """
+    判断两个Topods_Face的几何参数是否相同
+    :param face1:
+    :param face2:
+    :param tol:
+    :return:
+    """
+    aligned_surface1 = BRep_Tool.Surface(face1)
+    surf1 = GeomAdaptor_Surface(aligned_surface1)
+
+    aligned_surface2 = BRep_Tool.Surface(face2)
+    surf2 = GeomAdaptor_Surface(aligned_surface2)
+
+    type1 = face_type(face1)
+    type2 = face_type(face2)
+
+    if type1 != type2:
+        return False  # 不同类型的曲面直接判定不同
+
+    # ========== 平面 ==========
+    if type1 == 'plane':
+        pln1 = surf1.Plane()
+        pln2 = surf2.Plane()
+        n1 = pln1.Axis().Direction()
+        n2 = pln2.Axis().Direction()
+        o1 = pln1.Location()
+        o2 = pln2.Location()
+
+        # 比较法向和点到平面距离
+        same_normal = n1.IsParallel(n2, tol)
+        same_offset = abs(pln1.Distance(o2)) < tol
+        return same_normal and same_offset
+
+    # ========== 圆柱 ==========
+    elif type1 == 'cylinder':
+        cyl1 = surf1.Cylinder()
+        cyl2 = surf2.Cylinder()
+
+        same_axis = cyl1.Axis().IsCoaxial(cyl2.Axis(), tol, tol)
+        same_radius = abs(cyl1.Radius() - cyl2.Radius()) < tol
+        return same_axis and same_radius
+
+    # ========== 圆锥 ==========
+    elif type1 == 'cone':
+        cone1 = surf1.Cone()
+        cone2 = surf2.Cone()
+
+        same_axis = cone1.Axis().IsCoaxial(cone2.Axis(), tol, tol)
+        same_semi_angle = abs(cone1.SemiAngle() - cone2.SemiAngle()) < tol
+        return same_axis and same_semi_angle
+
+    # ========== 球面 ==========
+    elif type1 == 'sphere':
+        sph1 = surf1.Sphere()
+        sph2 = surf2.Sphere()
+
+        same_center = sph1.Location().IsEqual(sph2.Location(), tol)
+        same_radius = abs(sph1.Radius() - sph2.Radius()) < tol
+        return same_center and same_radius
+
+    # ========== 其他自由曲面 ==========
+    else:
+        return False
+
+
+def assign_merged_prim_index(shape_occ):
+    """
+    为面基元分配独立的索引，为了解决圆柱属于两个半圆柱基元的问题
+    :param shape_occ: 模型或者路径
+    :return:
+    """
+    if isinstance(shape_occ, str):
+        shape_occ = step_read_ocaf(shape_occ)
+
+    # 获取全部面
+    explorer = TopExp_Explorer(shape_occ, TopAbs_FACE)
+    face_all = []
+    while explorer.More():
+        face = explorer.Current()
+        face = topods.Face(face)
+        explorer.Next()
+        face_all.append(face)
+
+    face_dict = {v: i for i, v in enumerate(face_all)}
+
+    # 遍历全部边
+    explorer = TopExp_Explorer(shape_occ, TopAbs_EDGE)
+    while explorer.More():
+        edge = explorer.Current()
+        edge = topods.Edge(edge)
+        explorer.Next()
+
+        edge_aligned_face = get_edge_aligned_face(edge, shape_occ)
+        if edge_aligned_face is not None:
+            face1, face2 = edge_aligned_face
+
+            # 判断两个面参数是否相同，相同则将两个面的索引调整为两者最小的
+            is_param_equal = is_face_geom_equal(face1, face2)
+            if is_param_equal:
+
+                idx1 = face_dict[face1]
+                idx2 = face_dict[face2]
+
+                idx_adjust = min(idx1, idx2)
+                face_dict[face1] = idx_adjust
+                face_dict[face2] = idx_adjust
+
+    return face_dict
+
+
 def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt):
     """
     找到模型中，距该点最近的面
@@ -580,9 +731,7 @@ def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt):
     explorer = TopExp_Explorer(model_occ, TopAbs_FACE)
 
     c_idx = -1
-
     aligned_face = None
-    aligned_face_index = None
     aligned_face_dist = 999999.0
     while explorer.More():
         face = explorer.Current()
@@ -595,17 +744,13 @@ def get_point_aligned_face(model_occ: TopoDS_Shape, point: gp_Pnt):
 
             if current_dist < aligned_face_dist:
                 aligned_face_dist = current_dist
-                aligned_face_index = c_idx
                 aligned_face = face
 
         except:
             print('无法计算点与当前面的距离，跳过当前面')
             continue
 
-        # if current_dist <= prec + precision.Confusion():
-        #     return face, c_idx
-
-    return aligned_face, aligned_face_index, aligned_face_dist
+    return aligned_face, aligned_face_dist
 
 
 def get_logger(name: str = 'log'):
@@ -621,34 +766,26 @@ def get_logger(name: str = 'log'):
     return logger
 
 
-def step2pcd(step_path, save_path, n_points=2000, deflection=1e-4, xyz_only=False, using_tqdm=True, print_log=True, is_normalize=True):
+def get_points_shape_occ(shape_occ, n_points, deflection, inc_rate=0.05, max_itera=100):
     """
-    将step模型转化为带约束的点云，需要先转化为 mesh
-    :param step_path:
-    :param save_path:
+    从 OCC 模型上采样点
+    采样点数会接近 n_points，且不会低于该值
+    :param shape_occ:
     :param n_points:
     :param deflection:
-    :param xyz_only:
-    :param using_tqdm: 是否使用进度条
-    :param print_log:
-    :param is_normalize:
+    :param inc_rate: 迭代采点过程中上升或下降比例
+    :param max_itera:
     :return:
     """
-
     # 生成 mesh
     n_itera = 0
-    # n_csample = int(n_points * 0.5)
     n_sample = n_points
 
-    shape_occ = step_read_ocaf(step_path)
-    if is_normalize:
-        shape_occ = normalize_shape_to_unit_cube(shape_occ)
-
-    tmp_stl = f'tmp/{uuid.uuid4()}.stl'  # 生成不重复的临时文件
+    tmp_stl = f'tmp/{uuid.uuid4()}.stl'  # 生成不重复的临时文件名
     shapeocc2stl(shape_occ, tmp_stl, deflection)
 
+    # 生成初始点，由于初始点生成时数量不可控，因此通过多次尝试找到数量最合适的初始点
     last_vertex = None
-    inc_rate = 0.05
     while True:
         vertex_matrix = mesh_proc.get_points_mslab(tmp_stl, n_sample)
         n_real_sampled = vertex_matrix.shape[0]
@@ -688,24 +825,39 @@ def step2pcd(step_path, save_path, n_points=2000, deflection=1e-4, xyz_only=Fals
         n_itera += 1
         last_vertex = vertex_matrix
 
-        if n_itera >= 100:
+        if n_itera >= max_itera:
             raise ValueError('arrive max iteration, point number can not satisfy')
 
-
-        # if n_itera >= 100:
-        #     raise ValueError('arrive max iteration, point number can not satisfy')
-        # elif n_real_sampled >= n_points:
-        #     break
-        # else:
-        #     n_itera += 1
-        #     n_sample = int(n_sample * 1.05)
-
     os.remove(tmp_stl)
+    return vertex_matrix
 
-    if xyz_only:
-        np.savetxt(save_path, vertex_matrix, fmt='%.6f')
 
-    else:
+def step2pcd(step_path, save_path, n_points=2000, deflection=1e-4, with_cst=True, using_tqdm=True, print_log=True, is_normalize=True) -> int:
+    """
+    将step模型转化为带约束的点云，需要先转化为 mesh
+    :param step_path: STEP 模型路径
+    :param save_path: 点云文件保存路径，需要包含文件名即后缀
+    :param n_points: 点云中的点数
+    :param deflection: 模型离散化时的误差，越小点云精度越高
+    :param with_cst: 是否在生成点云时包含约束
+    :param using_tqdm: 是否使用进度条
+    :param print_log: 是否打印日志
+    :param is_normalize: 是否将模型先归一化到 [-1, 1]^3 的区域内，再进行点云获取
+    :return: 真实采样获得的点数
+    """
+    # 读取 occ 模型
+    shape_occ = step_read_ocaf(step_path)
+    if is_normalize:
+        shape_occ = normalize_shape_to_unit_cube(shape_occ)
+
+    # 获取点云
+    vertex_matrix = get_points_shape_occ(shape_occ, n_points, deflection)
+
+    # 获取合并后的面和对应的索引字典
+    merged_face_dict = assign_merged_prim_index(shape_occ)
+
+    # 获取点的约束
+    if with_cst:
         # 真实生成的点数，使用poisson_disk_sample得到的点数一般大于指定点数
         n_points_real = vertex_matrix.shape[0]
 
@@ -719,10 +871,11 @@ def step2pcd(step_path, save_path, n_points=2000, deflection=1e-4, xyz_only=Fals
                                            float(vertex_matrix[i, 1]),
                                            float(vertex_matrix[i, 2]))
 
-                    face_aligned, idx, min_dist = get_point_aligned_face(shape_occ, current_point)
+                    face_aligned, min_dist = get_point_aligned_face(shape_occ, current_point)
+                    idx = merged_face_dict[face_aligned]
 
                     if face_aligned is not None:
-                        current_datapoint = Point3DForDataSet(current_point, face_aligned, idx)
+                        current_datapoint = PointOfParamPCD(current_point, face_aligned, idx)
                         file_write.writelines(current_datapoint.get_save_str())
 
                     elif print_log:
@@ -733,8 +886,10 @@ def step2pcd(step_path, save_path, n_points=2000, deflection=1e-4, xyz_only=Fals
                         print(
                             f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
 
+    else:
+        np.savetxt(save_path, vertex_matrix, fmt='%.6f')
+
     n_real_sampled = vertex_matrix.shape[0]
-    # print(f'当前存储点数: {n_real_sampled}')
     return n_real_sampled
 
 
@@ -1232,6 +1387,12 @@ def test():
 
 
 if __name__ == '__main__':
+    step_file = r'C:\Users\ChengXi\Desktop\cstnet2\cube_div.STEP'
+    assign_merged_prim_index(step_file)
+
+
+
+
     # step_assem = r'C:\Users\ChengXi\Desktop\螺纹连接.STEP'
     # solids = read_step_assembly(step_assem)
 

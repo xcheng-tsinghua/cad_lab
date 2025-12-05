@@ -170,3 +170,74 @@ def remove_path_suffix(file_path):
     return os.path.splitext(os.path.basename(file_path))[0]
 
 
+def basename_without_ext(file_name):
+    """
+    将带路径和后缀的文件名
+    去掉路径和后缀
+    :param file_name:
+    :return:
+    """
+    name = os.path.splitext(os.path.basename(file_name))[0]
+    return name
+
+
+def flatten_folder(folder_A):
+    """
+    遍历文件夹 A 下 所有子文件夹（多级也可以）
+    将其中所有文件 移动到 A 目录下
+
+    移动后的文件名格式为：
+    子文件夹路径_文件名（路径用 _ 连接）
+
+    保证不会重名
+
+    移动完后子文件夹自动变空，但脚本不会删除子文件夹（如需删除可再加）
+    :param folder_A:
+    :return:
+    """
+    folder_A = os.path.abspath(folder_A)
+    for root, dirs, files in os.walk(folder_A):
+        # 跳过 A 自身
+        if root == folder_A:
+            continue
+
+        for file in files:
+            old_path = os.path.join(root, file)
+
+            # 计算 A 下的相对路径
+            rel_path = os.path.relpath(root, folder_A)
+
+            # 将路径分隔符替换成下划线
+            rel_path_flat = rel_path.replace(os.sep, "_")
+
+            # 新文件名：子文件夹路径_原文件名
+            new_filename = f"{rel_path_flat}_{file}"
+
+            new_path = os.path.join(folder_A, new_filename)
+
+            # 移动
+            shutil.move(old_path, new_path)
+            # print(f"Moved: {old_path} → {new_path}")
+
+
+def remove_empty_dirs(root):
+    root = os.path.abspath(root)
+
+    # bottom-up 方式遍历，确保先删子目录
+    for current, dirs, files in os.walk(root, topdown=False):
+        # 如果目录不是 root 且为空，则删除
+        if current != root and not os.listdir(current):
+            os.rmdir(current)
+            print("Deleted empty folder:", current)
+
+
+if __name__ == '__main__':
+    c_root = r'F:\deeplearning\草图项目\2_模型轮廓草图_1995084'
+    all_subdirs = get_subdirs(c_root)
+
+    for c_subdir in all_subdirs:
+        c_subdir_full = os.path.join(c_root, c_subdir)
+
+        print('processing folder: ', c_subdir_full)
+        # flatten_folder(c_subdir_full)
+        remove_empty_dirs(c_subdir_full)
