@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import upper_funcs
 from PIL import Image
+from pathlib import Path
 
 
 ## draw_para_net
@@ -336,10 +337,50 @@ def sketch_proj_select_subset(src_folder, dst_folder):
     # 在目标文件夹下创建类似的文件夹结构
     utils.create_tree_like(src_folder, dst_folder)
 
+    # 获取全部类别
+    cls_all = utils.get_subdirs(os.path.join(src_folder, 'model_3d'))
+
+    model_cls_id = {}
+
+    for c_cls in cls_all:
+        c_step_dir = os.path.join(src_folder, 'model_3d', c_cls)
+        c_steps_all = utils.get_allfiles(c_step_dir, 'step')
+
+        c_ids = []
+        for cc_step in c_steps_all:
+            c_base_name = utils.basename_without_ext(cc_step)
+            c_ids.append(c_base_name)
+
+        model_cls_id[c_cls] = c_ids
+
+        # 找到对应的图片和草图的路径
+        c_img_dir = os.path.join(src_folder, 'photo', c_cls)
+        c_skh_dir = os.path.join(src_folder, 'sketch_s3_352', c_cls)
+
+        c_imgs_all = utils.get_allfiles(c_img_dir, 'png')
+        for c_img in c_imgs_all:
+
+
+            pass
+
+
+
+
+
+
+
+
+
     # 找到模型文件夹下的全部文件id
     model_all = utils.get_allfiles(os.path.join(src_folder, 'model_3d'), 'step')
 
-    model_id = []
+
+    for c_model in model_all:
+        class_name = Path(c_model).parent.name
+
+        c_base_name = utils.basename_without_ext(c_model)
+        model_cls_id.append((class_name, c_base_name))
+
 
 
 
