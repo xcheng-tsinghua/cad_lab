@@ -1,4 +1,5 @@
 import os.path
+import shutil
 
 import numpy as np
 
@@ -358,34 +359,19 @@ def sketch_proj_select_subset(src_folder, dst_folder):
         c_skh_dir = os.path.join(src_folder, 'sketch_s3_352', c_cls)
 
         c_imgs_all = utils.get_allfiles(c_img_dir, 'png')
-        for c_img in c_imgs_all:
+        c_skhs_all = utils.get_allfiles(c_img_dir, 'txt')
 
+        for c_id in c_ids:
+            c_img_path = os.path.join(c_img_dir, c_id + '_1.png')
+            c_skh_path = os.path.join(c_skh_dir, c_id + '_1.png')
 
-            pass
+            if c_img_path in c_imgs_all and c_skh_path in c_skhs_all:
+                # 复制文件
+                c_img_target = c_img_path.replace(src_folder, dst_folder)
+                c_skh_target = c_skh_path.replace(src_folder, dst_folder)
 
-
-
-
-
-
-
-
-
-    # 找到模型文件夹下的全部文件id
-    model_all = utils.get_allfiles(os.path.join(src_folder, 'model_3d'), 'step')
-
-
-    for c_model in model_all:
-        class_name = Path(c_model).parent.name
-
-        c_base_name = utils.basename_without_ext(c_model)
-        model_cls_id.append((class_name, c_base_name))
-
-
-
-
-    pass
-
+                shutil.copy(c_img_path, c_img_target)
+                shutil.copy(c_skh_path, c_skh_target)
 
 
 if __name__ == '__main__':
