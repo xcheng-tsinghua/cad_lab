@@ -8,6 +8,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import upper_funcs
+from PIL import Image
 
 
 ## draw_para_net
@@ -286,6 +287,66 @@ def vis_pcd_gen():
     # vis.vis_pcd_plt(xyz, loc)
 
 
+def convert_jpg_to_png(root_folder, overwrite=False):
+    """
+    将 root_folder 及子文件夹中所有 JPG 转为 PNG
+
+    Parameters:
+        root_folder (str): 根目录
+        overwrite (bool): 是否覆盖已存在的 PNG 文件
+    """
+    for dirpath, dirnames, filenames in os.walk(root_folder):
+        for filename in filenames:
+            if filename.lower().endswith((".jpg", ".jpeg")):
+                jpg_path = os.path.join(dirpath, filename)
+                png_path = os.path.join(dirpath, filename.rsplit(".", 1)[0] + ".png")
+
+                # 如果 PNG 已存在且不覆盖，则跳过
+                if not overwrite and os.path.exists(png_path):
+                    print(f"跳过（已存在）：{png_path}")
+                    continue
+
+                try:
+                    img = Image.open(jpg_path)
+                    img.save(png_path)
+                    print(f"转换成功：{jpg_path} -> {png_path}")
+                except Exception as e:
+                    print(f"转换失败：{jpg_path}, 错误：{e}")
+
+
+def acc_correct():
+    n_chair = 323
+    n_shoe = 666
+
+    chair_vals = [0.220,0.368,0.235,0.377,0.238,0.385,0.241,0.407,0.255,0.437,0.252,0.440,0.725,0.807,]
+    shoe_vals = [0.154,0.300,0.158,0.307,0.164,0.316,0.176,0.352,0.179,0.355,0.192,0.389,0.455,0.715,]
+
+    chair_vals_new = [int(x * n_chair) / n_chair for x in chair_vals]
+    shoe_vals_new = [int(x * n_shoe) / n_shoe for x in shoe_vals]
+
+    print(chair_vals_new)
+    print(shoe_vals_new, '\n')
+
+    for i in range(len(chair_vals_new) // 2):
+        # print(f'{chair_vals_new[2*i] }, {chair_vals_new[2*i+1]}, {shoe_vals_new[2*i]}, {shoe_vals_new[2*i+1]}')
+        print(f'{chair_vals_new[2 * i] * n_chair}, {chair_vals_new[2 * i + 1] * n_chair}, {shoe_vals_new[2 * i] * n_shoe}, {shoe_vals_new[2 * i + 1] * n_shoe}')
+
+
+def sketch_proj_select_subset(src_folder, dst_folder):
+    # 在目标文件夹下创建类似的文件夹结构
+    utils.create_tree_like(src_folder, dst_folder)
+
+    # 找到模型文件夹下的全部文件id
+    model_all = utils.get_allfiles(os.path.join(src_folder, 'model_3d'), 'step')
+
+    model_id = []
+
+
+
+    pass
+
+
+
 if __name__ == '__main__':
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255, 255, 255), 4)
     # vis.vis_cls_log(r'C:\Users\ChengXi\Desktop\cstnet2\pnet2_geomloss.txt')
@@ -306,8 +367,15 @@ if __name__ == '__main__':
     # del_except()
 
     upper_funcs.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', remove_pixel=(255,255,255))
+    # upper_funcs.remove_png_white_pixel_batched(
+    #     r'E:\document\deeplearning_idea\sketch temporal is out\fid_cal_fig_save\generation\sketch-lattice',
+    #     remove_pixel=(255, 255, 255))
     # vis_pcd_gen()
     # vis.vis_pcd(r'D:\document\DeepLearning\DataSet\MCB_PointCloud\MCB_A\train\Helical geared motors\00025702.txt', delimiter=' ')
+
+    # convert_jpg_to_png(r'E:\document\deeplearning_idea\sketch temporal is out\fid_cal_fig_save\generation', True)
+
+    # acc_correct()
 
     pass
 

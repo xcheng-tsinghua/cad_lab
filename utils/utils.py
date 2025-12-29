@@ -231,13 +231,61 @@ def remove_empty_dirs(root):
             print("Deleted empty folder:", current)
 
 
+def translate_class_folder(root):
+    """
+    翻译一级子文件夹下的文件夹名
+
+    root
+    ├─ bearing (folder)
+    ├─ bolt (folder)
+    ├─ ...
+    └─ washer (folder)
+
+    """
+    terms_mapping = {
+        '衬套': 'Bushing',
+        '齿轮': 'Gear',
+        '带轮': 'Pulley',
+        '弹簧': 'Spring',
+        '挡圈': 'Retaining_ring',
+        '垫圈': 'Washer',
+        '堵头': 'Plug',
+        '阀门': 'Valve',
+        '法兰': 'Flange',
+        '风扇': 'Fan',
+        '间隔器': 'Spacer',
+        '键': 'Key',
+        '脚轮': 'Caster',
+        '接头': 'Joint',
+        '链轮': 'Sprocket',
+        '螺钉': 'Screw',
+        '螺母': 'Nut',
+        '螺栓': 'Bolt',
+        '螺柱': 'Stud',
+        '铆钉': 'Rivet',
+        '涡轮': 'Turbine',
+        '销': 'Pin',
+        '轴承': 'Bearing',
+
+    }
+
+    sub_dirs = get_subdirs(root)
+    for c_name in sub_dirs:
+        new_name = terms_mapping[c_name]
+        os.rename(os.path.join(root, c_name), os.path.join(root, new_name))
+
+
 if __name__ == '__main__':
-    c_root = r'F:\deeplearning\草图项目\2_模型轮廓草图_1995084'
-    all_subdirs = get_subdirs(c_root)
+    # c_root = r'F:\deeplearning\草图项目\2_模型轮廓草图_1995084'
+    # all_subdirs = get_subdirs(c_root)
+    #
+    # for c_subdir in all_subdirs:
+    #     c_subdir_full = os.path.join(c_root, c_subdir)
+    #
+    #     print('processing folder: ', c_subdir_full)
+    #     # flatten_folder(c_subdir_full)
+    #     remove_empty_dirs(c_subdir_full)
+    translate_class_folder(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad\model_3d')
 
-    for c_subdir in all_subdirs:
-        c_subdir_full = os.path.join(c_root, c_subdir)
+    pass
 
-        print('processing folder: ', c_subdir_full)
-        # flatten_folder(c_subdir_full)
-        remove_empty_dirs(c_subdir_full)
