@@ -334,6 +334,14 @@ def acc_correct():
         print(f'{chair_vals_new[2 * i] * n_chair}, {chair_vals_new[2 * i + 1] * n_chair}, {shoe_vals_new[2 * i] * n_shoe}, {shoe_vals_new[2 * i + 1] * n_shoe}')
 
 
+def acc_correct2():
+    base_num = 34500
+    all_val = [0.6808,0.6908,0.7422,0.6924,0.7050,0.7310,0.6068,0.6665,0.6224,0.6768,0.6800,0.6977,0.5249,0.7070,0.7280,0.6829,0.7537]
+
+    all_val_new = [int(x * base_num) / base_num for x in all_val]
+    print(all_val_new)
+
+
 def sketch_proj_select_subset(src_folder, dst_folder):
     # 在目标文件夹下创建类似的文件夹结构
     utils.create_tree_like(src_folder, dst_folder)
@@ -341,9 +349,11 @@ def sketch_proj_select_subset(src_folder, dst_folder):
     # 获取全部类别
     cls_all = utils.get_subdirs(os.path.join(src_folder, 'model_3d'))
 
-    model_cls_id = {}
+    max_nsave_cat = 10
 
     for c_cls in cls_all:
+        c_save_cat = 0
+
         c_step_dir = os.path.join(src_folder, 'model_3d', c_cls)
         c_steps_all = utils.get_allfiles(c_step_dir, 'step')
 
@@ -352,26 +362,31 @@ def sketch_proj_select_subset(src_folder, dst_folder):
             c_base_name = utils.basename_without_ext(cc_step)
             c_ids.append(c_base_name)
 
-        model_cls_id[c_cls] = c_ids
-
         # 找到对应的图片和草图的路径
         c_img_dir = os.path.join(src_folder, 'photo', c_cls)
         c_skh_dir = os.path.join(src_folder, 'sketch_s3_352', c_cls)
 
         c_imgs_all = utils.get_allfiles(c_img_dir, 'png')
-        c_skhs_all = utils.get_allfiles(c_img_dir, 'txt')
+        c_skhs_all = utils.get_allfiles(c_skh_dir, 'txt')
 
         for c_id in c_ids:
             c_img_path = os.path.join(c_img_dir, c_id + '_1.png')
-            c_skh_path = os.path.join(c_skh_dir, c_id + '_1.png')
+            c_skh_path = os.path.join(c_skh_dir, c_id + '_1.txt')
+            c_stp_path = os.path.join(c_step_dir, c_id + '.STEP')
 
             if c_img_path in c_imgs_all and c_skh_path in c_skhs_all:
                 # 复制文件
                 c_img_target = c_img_path.replace(src_folder, dst_folder)
                 c_skh_target = c_skh_path.replace(src_folder, dst_folder)
+                c_stp_target = c_stp_path.replace(src_folder, dst_folder)
 
                 shutil.copy(c_img_path, c_img_target)
                 shutil.copy(c_skh_path, c_skh_target)
+                shutil.copy(c_stp_path, c_stp_target)
+
+                c_save_cat += 1
+                if c_save_cat >= max_nsave_cat:
+                    break
 
 
 if __name__ == '__main__':
@@ -393,7 +408,7 @@ if __name__ == '__main__':
     # print(os.path.splitext(stepfile))
     # del_except()
 
-    upper_funcs.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', remove_pixel=(255,255,255))
+    # upper_funcs.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig\tvcg_rev', remove_pixel=(240,240,240))
     # upper_funcs.remove_png_white_pixel_batched(
     #     r'E:\document\deeplearning_idea\sketch temporal is out\fid_cal_fig_save\generation\sketch-lattice',
     #     remove_pixel=(255, 255, 255))
@@ -403,6 +418,11 @@ if __name__ == '__main__':
     # convert_jpg_to_png(r'E:\document\deeplearning_idea\sketch temporal is out\fid_cal_fig_save\generation', True)
 
     # acc_correct()
+    # utils.unify_step_suffix_recursive(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad\model_3d')
+
+    # sketch_proj_select_subset(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad', r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad_small')
+
+    acc_correct2()
 
     pass
 

@@ -161,6 +161,27 @@ def del_file_by_suffix(dir_path, suffix='txt'):
     print('删除文件数：', delete_count)
 
 
+def unify_step_suffix_recursive(root_dir):
+    """
+    递归遍历 root_dir 及其所有子目录，
+    将 .stp / .step（大小写不敏感）的文件后缀统一改为 .STEP
+    """
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            old_path = os.path.join(dirpath, filename)
+
+            name, ext = os.path.splitext(filename)
+            if ext.lower() in {".stp", ".step"} and ext != ".STEP":
+                new_filename = name + ".STEP"
+                new_path = os.path.join(dirpath, new_filename)
+
+                # 避免同名覆盖
+                if not os.path.exists(new_path):
+                    os.rename(old_path, new_path)
+                else:
+                    print(f"Skip (already exists): {new_path}")
+
+
 def remove_path_suffix(file_path):
     """
     删除文件的路径和后缀名

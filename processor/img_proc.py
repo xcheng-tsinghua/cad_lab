@@ -20,7 +20,8 @@ def remove_png_white_pixel(png_file, remove_pixel=(255, 255, 255)):
     new_pixels = []
     for pixel in pixels:
         # 检查像素是否为白色
-        if pixel[:3] == remove_pixel:
+        # if pixel[:3] == remove_pixel:
+        if sum(pixel[:3]) > sum(remove_pixel):
             # 如果是白色，则将其设置为透明
             new_pixels.append((255, 255, 255, 0))
         else:
