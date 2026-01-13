@@ -1,11 +1,11 @@
 
 ## pythonocc-core 环境搭建
 ### 1. 创建 conda 环境  
-`conda create -n occt python=3.9.19`  
+`conda create -n occt python=3.11.11`  
 `conda activate occt`
 
 ### 2. 安装 pythonocc-core
-`conda install -c conda-forge pythonocc-core=7.7.2`  
+`conda install -c conda-forge pythonocc-core=7.9.0`  
 
 无法安装`pythonocc-core`需要添加下载源：  
 `conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/`  
