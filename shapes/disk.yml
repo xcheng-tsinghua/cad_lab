@@ -1,0 +1,324 @@
+defaultFeatures:
+- message:
+    featureId: Origin
+    featureType: origin
+    hasUserCode: false
+    name: Origin
+    namespace: ''
+    nodeId: MgLnPUUx4WnIbWOtt
+    parameters: []
+    returnAfterSubfeatures: false
+    subFeatures: []
+    suppressed: false
+    suppressionState:
+      type: 0
+  type: 134
+  typeName: BTMFeature
+- message:
+    featureId: Top
+    featureType: defaultPlane
+    hasUserCode: false
+    name: Top
+    namespace: ''
+    nodeId: MA+oHgcOEIhyIqvDU
+    parameters: []
+    returnAfterSubfeatures: false
+    subFeatures: []
+    suppressed: false
+    suppressionState:
+      type: 0
+  type: 134
+  typeName: BTMFeature
+- message:
+    featureId: Front
+    featureType: defaultPlane
+    hasUserCode: false
+    name: Front
+    namespace: ''
+    nodeId: MjSQHb0SOzpax3epF
+    parameters: []
+    returnAfterSubfeatures: false
+    subFeatures: []
+    suppressed: false
+    suppressionState:
+      type: 0
+  type: 134
+  typeName: BTMFeature
+- message:
+    featureId: Right
+    featureType: defaultPlane
+    hasUserCode: false
+    name: Right
+    namespace: ''
+    nodeId: MHFVesxbuu9s05RjQ
+    parameters: []
+    returnAfterSubfeatures: false
+    subFeatures: []
+    suppressed: false
+    suppressionState:
+      type: 0
+  type: 134
+  typeName: BTMFeature
+featureStates:
+- key: Origin
+  value:
+    message:
+      featureStatus: OK
+    type: 1688
+    typeName: BTFeatureState
+- key: Top
+  value:
+    message:
+      featureStatus: OK
+    type: 1688
+    typeName: BTFeatureState
+- key: Front
+  value:
+    message:
+      featureStatus: OK
+    type: 1688
+    typeName: BTFeatureState
+- key: FQgWGf8WhgalpUy
+  value:
+    message:
+      featureStatus: OK
+    type: 1688
+    typeName: BTFeatureState
+- key: Right
+  value:
+    message:
+      featureStatus: OK
+    type: 1688
+    typeName: BTFeatureState
+- key: FI4bCL9y0XvsF52
+  value:
+    message:
+      featureStatus: OK
+    type: 1688
+    typeName: BTFeatureState
+features:
+- message:
+    constraints:
+    - message:
+        constraintType: COINCIDENT
+        entityId: 62f66bb0-010c-49f1-b4d2-f00897b7959e.centerSnap0
+        hasOffsetData1: false
+        hasOffsetData2: false
+        hasPierceParameter: false
+        hasUserCode: false
+        helpParameters: []
+        namespace: ''
+        nodeId: MClbNxYE/KbWPGffy
+        offsetDistance1: 0.0
+        offsetDistance2: 0.0
+        offsetOrientation1: false
+        offsetOrientation2: false
+        parameters:
+        - message:
+            hasUserCode: false
+            nodeId: MeikPNB4djz1/qz9I
+            parameterId: local0
+            value: 62f66bb0-010c-49f1-b4d2-f00897b7959e.center
+          type: 149
+          typeName: BTMParameterString
+        - message:
+            hasUserCode: false
+            nodeId: MONgoO4xu7X7h3vSo
+            parameterId: external0
+            queries:
+            - message:
+                geometryIds: []
+                hasUserCode: false
+                nodeId: MGECH5YnQRpcQ/AJ1
+              type: 138
+              typeName: BTMIndividualQuery
+          type: 148
+          typeName: BTMParameterQueryList
+        pierceParameter: 0.0
+      type: 2
+      typeName: BTMSketchConstraint
+    entities:
+    - message:
+        centerId: ''
+        entityId: 62f66bb0-010c-49f1-b4d2-f00897b7959e
+        geometry:
+          message:
+            clockwise: false
+            radius: 0.09104851445359824
+            xCenter: 0.0
+            xDir: 1.0
+            yCenter: 0.0
+            yDir: 0.0
+          type: 115
+          typeName: BTCurveGeometryCircle
+        hasUserCode: false
+        internalIds: []
+        isConstruction: false
+        namespace: ''
+        nodeId: MCa7kX5EiXeDhUAzy
+        parameters: []
+      type: 4
+      typeName: BTMSketchCurve
+    featureId: FQgWGf8WhgalpUy
+    featureType: newSketch
+    hasUserCode: false
+    name: Sketch 1
+    namespace: ''
+    nodeId: M0V2n06fw3R3GcPum
+    parameters:
+    - message:
+        hasUserCode: false
+        nodeId: MvsbzIaAgntDeoGSy
+        parameterId: sketchPlane
+        queries:
+        - message:
+            geometryIds:
+            - JDC
+            hasUserCode: false
+            nodeId: MQBugXZDU89wdBh3+
+          type: 138
+          typeName: BTMIndividualQuery
+      type: 148
+      typeName: BTMParameterQueryList
+    - message:
+        enumName: FeatureScriptVersionNumber
+        hasUserCode: false
+        namespace: ''
+        nodeId: MOU3LVqp7xzybzs0r
+        parameterId: asVersion
+        value: V608_MERGE_FROM_TOOLS
+      type: 145
+      typeName: BTMParameterEnum
+    returnAfterSubfeatures: false
+    subFeatures: []
+    suppressed: false
+    suppressionState:
+      type: 0
+  type: 151
+  typeName: BTMSketch
+- message:
+    featureId: FI4bCL9y0XvsF52
+    featureType: extrude
+    hasUserCode: false
+    name: Extrude 1
+    namespace: ''
+    nodeId: MofL7ryfrNoJYpDcW
+    parameters:
+    - message:
+        enumName: ToolBodyType
+        hasUserCode: false
+        namespace: ''
+        nodeId: M/9qmzItPv/07CxY4
+        parameterId: bodyType
+        value: SOLID
+      type: 145
+      typeName: BTMParameterEnum
+    - message:
+        enumName: NewBodyOperationType
+        hasUserCode: false
+        namespace: ''
+        nodeId: MphWCTQjMq4as4YbT
+        parameterId: operationType
+        value: NEW
+      type: 145
+      typeName: BTMParameterEnum
+    - message:
+        hasUserCode: false
+        nodeId: McneW6iiGik9Pykuh
+        parameterId: entities
+        queries:
+        - message:
+            geometryIds:
+            - JGC
+            hasUserCode: false
+            nodeId: M6fmkiSEIrwaWg7Dn
+          type: 138
+          typeName: BTMIndividualQuery
+      type: 148
+      typeName: BTMParameterQueryList
+    - message:
+        hasUserCode: false
+        nodeId: MVv7vmYwTJY//68MO
+        parameterId: surfaceEntities
+        queries: []
+      type: 148
+      typeName: BTMParameterQueryList
+    - message:
+        enumName: BoundingType
+        hasUserCode: false
+        namespace: ''
+        nodeId: MhycanqmmZdWQlx2L
+        parameterId: endBound
+        value: BLIND
+      type: 145
+      typeName: BTMParameterEnum
+    - message:
+        hasUserCode: false
+        nodeId: M6LvuZvVOF+7HXrZ9
+        parameterId: oppositeDirection
+        value: false
+      type: 144
+      typeName: BTMParameterBoolean
+    - message:
+        hasUserCode: false
+        nodeId: MEbjxD6534/s+eU4u
+        parameterId: endBoundEntity
+        queries: []
+      type: 148
+      typeName: BTMParameterQueryList
+    - message:
+        expression: 1.0*in
+        hasUserCode: false
+        isInteger: false
+        nodeId: Mg9uqp5Zi1tsEytGE
+        parameterId: depth
+        units: ''
+        value: 0.0
+      type: 147
+      typeName: BTMParameterQuantity
+    - message:
+        hasUserCode: false
+        nodeId: M3yOA9NhD830GWDix
+        parameterId: defaultScope
+        value: false
+      type: 144
+      typeName: BTMParameterBoolean
+    - message:
+        hasUserCode: false
+        nodeId: MdYm/Tq8pPPO9ZsYM
+        parameterId: booleanScope
+        queries: []
+      type: 148
+      typeName: BTMParameterQueryList
+    - message:
+        enumName: FeatureScriptVersionNumber
+        hasUserCode: false
+        namespace: ''
+        nodeId: M+oSXJ0atVACbd/EY
+        parameterId: asVersion
+        value: V608_MERGE_FROM_TOOLS
+      type: 145
+      typeName: BTMParameterEnum
+    returnAfterSubfeatures: false
+    subFeatures: []
+    suppressed: false
+    suppressionState:
+      type: 0
+  type: 134
+  typeName: BTMFeature
+imports:
+- message:
+    hasUserCode: false
+    namespace: ''
+    nodeId: M0jTm0UaKUPJDjc36
+    path: onshape/std/geometry.fs
+    version: '1024.0'
+  type: 136
+  typeName: BTMImport
+isComplete: true
+libraryVersion: 1024
+microversionSkew: false
+rejectMicroversionSkew: false
+rollbackIndex: 2
+serializationVersion: 1.1.16
+sourceMicroversion: 7d3bcebac30a85a35a33b1fe
