@@ -5,3 +5,4 @@ __pycache__/
 functions/__pycache__/
 utils/__pycache__/
 .idea/
+backups/
