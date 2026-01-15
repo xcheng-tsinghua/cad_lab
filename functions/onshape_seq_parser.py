@@ -10,11 +10,11 @@ import itertools
 
 # ================= 系统配置 =================
 # 输入：Raw Onshape YAML 数据集根目录
-INPUT_ROOT = r"/mnt/c/Users/grfpa/Downloads/12-9"
+# INPUT_ROOT = r"/mnt/c/Users/grfpa/Downloads/12-9"
 # 输出：生成的三维模型 (STEP) 存储目录
-OUTPUT_DIR = r"C:\Users\ChengXi\Desktop\cstnet2"
+# OUTPUT_DIR = r"C:\Users\ChengXi\Desktop\cstnet2"
 # 调试限制：0 或 -1 代表全量运行 (Production Mode)
-MAX_FILES = 0
+# MAX_FILES = 0
 # ===========================================
 
 
@@ -95,14 +95,14 @@ def parse_geometry_message(geo_msg):
     return None
 
 
-def process_single_file(file_path):
+def process_single_file(file_path, save_path):
     """
     单文件处理流水线：YAML -> Sketch -> Extrude -> STEP
     """
     # 构造输出路径
-    folder_name = os.path.basename(os.path.dirname(file_path))
-    file_name = os.path.splitext(os.path.basename(file_path))[0]
-    save_path = os.path.join(OUTPUT_DIR, f"{folder_name}_{file_name}.step")
+    # folder_name = os.path.basename(os.path.dirname(file_path))
+    # file_name = os.path.splitext(os.path.basename(file_path))[0]
+    # save_path = os.path.join(OUTPUT_DIR, f"{folder_name}_{file_name}.step")
 
     # 断点续传检测
     if os.path.exists(save_path):

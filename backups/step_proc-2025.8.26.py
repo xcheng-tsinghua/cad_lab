@@ -42,7 +42,7 @@ import itertools
 from collections import Counter
 
 # self
-from processor import mesh_proc
+from functions import mesh_proc
 from utils import utils
 
 

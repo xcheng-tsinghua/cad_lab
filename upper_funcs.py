@@ -5,7 +5,7 @@
 import os
 import shutil
 from utils import utils
-from processor import svg_proc, img_proc
+from functions import svg_proc, img_proc
 from tqdm import tqdm
 from multiprocessing import Pool
 from functools import partial

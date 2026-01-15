@@ -4,7 +4,7 @@ import shutil
 import numpy as np
 
 from utils import vis, utils
-from processor import step_proc, img_proc
+from functions import step_proc, img_proc, onshape_seq_parser
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -396,6 +396,13 @@ def sketch_proj_select_subset(src_folder, dst_folder):
                     break
 
 
+def test_parse_onshape():
+    seq_file = './shapes/disk.yml'
+    save_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\disk.STEP'
+
+    onshape_seq_parser.process_single_file(seq_file, save_file)
+
+
 if __name__ == '__main__':
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255, 255, 255), 4)
     # vis.vis_cls_log(r'C:\Users\ChengXi\Desktop\cstnet2\pnet2_geomloss.txt')
@@ -429,7 +436,9 @@ if __name__ == '__main__':
 
     # sketch_proj_select_subset(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad', r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad_small')
 
-    acc_correct2()
+    # acc_correct2()
+
+    test_parse_onshape()
 
     pass
 

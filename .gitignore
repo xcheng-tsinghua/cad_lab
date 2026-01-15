@@ -2,6 +2,6 @@ pythonocc-demos/
 tmp/
 log/
 __pycache__/
-processor/__pycache__/
+functions/__pycache__/
 utils/__pycache__/
 .idea/

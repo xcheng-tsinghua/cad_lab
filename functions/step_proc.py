@@ -60,7 +60,7 @@ from multiprocessing import Pool
 import uuid
 
 # self
-from processor import mesh_proc
+from functions import mesh_proc
 from utils import utils
 
 
