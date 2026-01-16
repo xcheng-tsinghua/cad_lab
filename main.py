@@ -590,6 +590,10 @@ def get_default_plane_id():
     #     print(e['name'], e['id'], e['elementType'])
 
 
+def test_deepcad_onshape_parser():
+    onshape_seq_parser.main()
+
+
 if __name__ == '__main__':
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255, 255, 255), 4)
     # vis.vis_cls_log(r'C:\Users\ChengXi\Desktop\cstnet2\pnet2_geomloss.txt')
@@ -627,7 +631,7 @@ if __name__ == '__main__':
 
     # test_parse_onshape()
 
-    test_parse_onshape()
+    test_deepcad_onshape_parser()
 
     pass
 
