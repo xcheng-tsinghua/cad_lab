@@ -11,6 +11,9 @@ from mpl_toolkits.mplot3d import Axes3D
 import upper_funcs
 from PIL import Image
 from pathlib import Path
+import requests
+from requests.auth import HTTPBasicAuth
+from onshape_client.client import Client
 
 
 ## draw_para_net
@@ -397,10 +400,194 @@ def sketch_proj_select_subset(src_folder, dst_folder):
 
 
 def test_parse_onshape():
-    seq_file = './shapes/disk.yml'
-    save_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\disk.STEP'
+    seq_file = './shapes/cover.yml'
+    save_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\cover.STEP'
 
-    onshape_seq_parser.process_single_file(seq_file, save_file)
+    onshape_seq_parser.seq_to_step(seq_file, save_file)
+
+
+def test_save_onshape():
+    onshape_seq_parser.save_part()
+
+
+def get_default_plane_id():
+    # did = "0dde8d689fcce59931c8fbca"
+    # eid = "5ae1071dadf8820769e721e3"
+    # micro = "7d3bcebac30a85a35a33b1fe"
+    #
+    # url = f"https://cad.onshape.com/api/partstudios/d/{did}/m/{micro}/e/{eid}/topology"
+    #
+    #
+    # resp = requests.get(url, auth=HTTPBasicAuth(onshape_seq_parser.ACCESS_KEY, onshape_seq_parser.SECRET_KEY))
+    # data = resp.json()
+    #
+    # for face in data.get("faces", []):
+    #     print(face["id"], face.get("surface", {}).get("type"), face.get("featureId"), face.get("name"))
+
+    client = Client(configuration={
+        "base_url": "https://cad.onshape.com",
+        "access_key": onshape_seq_parser.ACCESS_KEY,
+        "secret_key": onshape_seq_parser.SECRET_KEY
+    })
+
+    print('clint id:', client.get_authorization_url())
+
+    did = "36fc37575b42a9da77cce228"
+    wid = "aca639292b8175da0cee3ac3"
+    eid = "50251856ed10b39c9dc4e4a9"  # Part Studio
+    L = 50  # 正方体边长（mm）
+
+    # -----------------------------
+    # 1. 构造草图特征（Sketch）
+    # -----------------------------
+    sketch_feature = {
+        "feature": {
+            "featureType": "sketch",
+            "name": "SquareSketch",
+            "parameters": [
+                {
+                    "message": {
+                        "parameterId": "sketchPlane",
+                        "nodeId": "sketchPlane",
+                        "value": {
+                            "message": {
+                                "entityType": "BTMEntity",
+                                "id": "JDC",  # Top plane（默认基准面）
+                                "type": "FACE"
+                            }
+                        }
+                    }
+                }
+            ],
+            "entities": [
+                # ---- 4 条边（正方形）----
+                {
+                    "entityType": "BTMSketchCurveSegment",
+                    "entityId": "L1",
+                    "geometry": {
+                        "type": "line",
+                        "startPoint": [0, 0],
+                        "endPoint": [L, 0]
+                    }
+                },
+                {
+                    "entityType": "BTMSketchCurveSegment",
+                    "entityId": "L2",
+                    "geometry": {
+                        "type": "line",
+                        "startPoint": [L, 0],
+                        "endPoint": [L, L]
+                    }
+                },
+                {
+                    "entityType": "BTMSketchCurveSegment",
+                    "entityId": "L3",
+                    "geometry": {
+                        "type": "line",
+                        "startPoint": [L, L],
+                        "endPoint": [0, L]
+                    }
+                },
+                {
+                    "entityType": "BTMSketchCurveSegment",
+                    "entityId": "L4",
+                    "geometry": {
+                        "type": "line",
+                        "startPoint": [0, L],
+                        "endPoint": [0, 0]
+                    }
+                }
+            ],
+            "constraints": [
+                # ---- 端点重合，形成闭环 ----
+                {"constraintType": "COINCIDENT", "entities": ["L1.end", "L2.start"]},
+                {"constraintType": "COINCIDENT", "entities": ["L2.end", "L3.start"]},
+                {"constraintType": "COINCIDENT", "entities": ["L3.end", "L4.start"]},
+                {"constraintType": "COINCIDENT", "entities": ["L4.end", "L1.start"]},
+
+                # ---- 平行约束 ----
+                {"constraintType": "PARALLEL", "entities": ["L1", "L3"]},
+                {"constraintType": "PARALLEL", "entities": ["L2", "L4"]}
+            ],
+            "dimensions": [
+                # ---- 尺寸：L1 长度 = L ----
+                {
+                    "entityType": "BTMSketchDimension",
+                    "entityId": "D1",
+                    "dimensionType": "DISTANCE",
+                    "entities": ["L1.start", "L1.end"],
+                    "value": L
+                }
+            ]
+        }
+    }
+
+    # client.part_studios_api.add_part_studio_feature
+    client.part_studios_api.add_part_studio_feature(
+        did=did, wvm='w', wvmid=wid, eid=eid,
+        body=sketch_feature
+    )
+
+    print("Sketch with constraints and dimension created.")
+
+    # -----------------------------
+    # 2. 构造拉伸特征（Extrude）
+    # -----------------------------
+    extrude_feature = {
+        "feature": {
+            "featureType": "extrude",
+            "name": "CubeExtrude",
+            "parameters": [
+                {
+                    "message": {
+                        "parameterId": "entities",
+                        "value": {
+                            "message": {
+                                "entityType": "BTMEntity",
+                                "id": "SquareSketch",
+                                "type": "FACE"
+                            }
+                        }
+                    }
+                },
+                {
+                    "message": {
+                        "parameterId": "depth",
+                        "value": L
+                    }
+                },
+                {
+                    "message": {
+                        "parameterId": "operationType",
+                        "value": "NEW"
+                    }
+                }
+            ]
+        }
+    }
+
+    client.part_studios_api.add_feature(
+        did=did, wvm='w', wvmid=wid, eid=eid,
+        body=extrude_feature
+    )
+
+    print("Extrude completed. Cube created.")
+
+
+    # client = Client(
+    #     configuration={
+    #         'base_url': 'https://cad.onshape.com',
+    #         'access_key': onshape_seq_parser.ACCESS_KEY,
+    #         'secret_key': onshape_seq_parser.SECRET_KEY
+    #     }
+    # )
+    #
+    # did = 'DOCUMENT_ID'
+    # wid = 'WORKSPACE_ID'
+    #
+    # elements = client.documents_api.get_elements(did=did, wvm='w', wvmid=wid)
+    # for e in elements:
+    #     print(e['name'], e['id'], e['elementType'])
 
 
 if __name__ == '__main__':
@@ -437,6 +624,8 @@ if __name__ == '__main__':
     # sketch_proj_select_subset(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad', r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad_small')
 
     # acc_correct2()
+
+    # test_parse_onshape()
 
     test_parse_onshape()
 

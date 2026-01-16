@@ -7,15 +7,18 @@ from cadquery import exporters
 from tqdm import tqdm
 import time
 import itertools
+import json
+import requests
+import hashlib
+import hmac
+import base64
+import onshape_client
 
-# ================= 系统配置 =================
-# 输入：Raw Onshape YAML 数据集根目录
-# INPUT_ROOT = r"/mnt/c/Users/grfpa/Downloads/12-9"
-# 输出：生成的三维模型 (STEP) 存储目录
-# OUTPUT_DIR = r"C:\Users\ChengXi\Desktop\cstnet2"
-# 调试限制：0 或 -1 代表全量运行 (Production Mode)
-# MAX_FILES = 0
-# ===========================================
+
+# onshape 账户信息
+ACCESS_KEY = 'on_55BVmavIbs4C647QrKZ3l'
+SECRET_KEY = 'bPldbykI6BjicZAzoO3BYXoMlCRvYQq9HlQfEqIhZ4Z3Yy5E'
+BASE_URL = "https://cad.onshape.com"
 
 
 def parse_geometry_message(geo_msg):
@@ -95,103 +98,168 @@ def parse_geometry_message(geo_msg):
     return None
 
 
-def process_single_file(file_path, save_path):
+def seq_to_step(file_path, save_path):
     """
     单文件处理流水线：YAML -> Sketch -> Extrude -> STEP
     """
-    # 构造输出路径
-    # folder_name = os.path.basename(os.path.dirname(file_path))
-    # file_name = os.path.splitext(os.path.basename(file_path))[0]
-    # save_path = os.path.join(OUTPUT_DIR, f"{folder_name}_{file_name}.step")
+    with open(file_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
 
-    # 断点续传检测
-    if os.path.exists(save_path):
-        return "Skipped"
+    solids_collection = []  # 实体收集容器
+    features = data.get("features", [])
 
-    try:
-        with open(file_path, "r") as f:
-            data = yaml.safe_load(f)
+    for i in range(len(features)):
+        with open(rf"E:\document\DeeplearningIdea\multi_cmd_seq_gen\{i}.json", "w", encoding="utf-8") as f:
+            json.dump(features[i], f, ensure_ascii=False, indent=4)
 
-        solids_collection = []  # 实体收集容器
-        features = data.get("features", [])
 
-        # 遍历特征列表
-        for feat in features:
-            f_name = feat.get("message", {}).get("name", "Unknown")
-            f_type = feat.get("typeName", "")
+    # 遍历特征列表
+    for feat in features:
+        f_name = feat.get("message", {}).get("name", "Unknown")
+        f_type = feat.get("typeName", "")
 
-            # 仅处理 Sketch 相关特征 (过滤 Helix, Pattern 等复杂特征)
-            if "Sketch" in f_type or "Sketch" in f_name or "Axis" in f_name:
+        # 仅处理 Sketch 相关特征 (过滤 Helix, Pattern 等复杂特征)
+        if "Sketch" in f_type or "Sketch" in f_name or "Axis" in f_name:
 
-                # 对应策略 3.2：坐标系扁平化 (强制使用 XY 平面)
-                wp = cq.Workplane("XY")
-                entities = feat.get("message", {}).get("entities", [])
-                has_geo = False
+            # 对应策略 3.2：坐标系扁平化 (强制使用 XY 平面)
+            wp = cq.Workplane("XY")
+            entities = feat.get("message", {}).get("entities", [])
+            has_geo = False
 
-                for ent in entities:
-                    geo_msg = ent.get("message", {}).get("geometry", {}).get("message")
-                    if not geo_msg:
-                        continue
-                    geo_data = parse_geometry_message(geo_msg)
-                    if not geo_data:
-                        continue
+            for ent in entities:
+                geo_msg = ent.get("message", {}).get("geometry", {}).get("message")
+                if not geo_msg:
+                    continue
+                geo_data = parse_geometry_message(geo_msg)
+                if not geo_data:
+                    continue
 
-                    # CadQuery 绘图逻辑
-                    try:
-                        if geo_data["type"] == "Circle":
-                            wp = wp.pushPoints(
-                                [(geo_data["xc"], geo_data["yc"])]
-                            ).circle(geo_data["r"])
-                            has_geo = True
+                # CadQuery 绘图逻辑
+                try:
+                    if geo_data["type"] == "Circle":
+                        wp = wp.pushPoints(
+                            [(geo_data["xc"], geo_data["yc"])]
+                        ).circle(geo_data["r"])
+                        has_geo = True
 
-                        elif geo_data["type"] == "Line":
-                            wp = wp.moveTo(geo_data["x1"], geo_data["y1"]).lineTo(
-                                geo_data["x2"], geo_data["y2"]
+                    elif geo_data["type"] == "Line":
+                        wp = wp.moveTo(geo_data["x1"], geo_data["y1"]).lineTo(
+                            geo_data["x2"], geo_data["y2"]
+                        )
+                        has_geo = True
+
+                    elif geo_data["type"] == "Spline":
+                        pts = geo_data["points"]
+                        try:
+                            # 尝试光滑样条
+                            wp = wp.moveTo(pts[0][0], pts[0][1]).spline(
+                                pts[1:], closed=geo_data["is_closed"]
                             )
-                            has_geo = True
+                        except:
+                            # 降级策略：多段线 (Polyline)
+                            wp = wp.moveTo(pts[0][0], pts[0][1]).polyline(pts[1:])
+                            if geo_data["is_closed"]:
+                                wp = wp.close()
+                        has_geo = True
+                except:
+                    pass
 
-                        elif geo_data["type"] == "Spline":
-                            pts = geo_data["points"]
-                            try:
-                                # 尝试光滑样条
-                                wp = wp.moveTo(pts[0][0], pts[0][1]).spline(
-                                    pts[1:], closed=geo_data["is_closed"]
-                                )
-                            except:
-                                # 降级策略：多段线 (Polyline)
-                                wp = wp.moveTo(pts[0][0], pts[0][1]).polyline(pts[1:])
-                                if geo_data["is_closed"]:
-                                    wp = wp.close()
-                            has_geo = True
+            # 对应策略 3.1：全量强制拉伸 (Force Blind Extrude)
+            if has_geo:
+                try:
+                    # 尝试生成实体 (Solid)
+                    res = wp.extrude(5.0)
+                    solids_collection.append(res)
+                except:
+                    # 对应策略 3.4：兜底线框导出 (Wireframe Fallback)
+                    try:
+                        wires = wp.vals()
+                        solids_collection.extend(wires)
                     except:
                         pass
 
-                # 对应策略 3.1：全量强制拉伸 (Force Blind Extrude)
-                if has_geo:
-                    try:
-                        # 尝试生成实体 (Solid)
-                        res = wp.extrude(5.0)
-                        solids_collection.append(res)
-                    except:
-                        # 对应策略 3.4：兜底线框导出 (Wireframe Fallback)
-                        try:
-                            wires = wp.vals()
-                            solids_collection.extend(wires)
-                        except:
-                            pass
+    # 导出逻辑
+    if solids_collection:
+        assembly = cq.Assembly()
+        for idx, obj in enumerate(solids_collection):
+            assembly.add(obj, name=f"obj_{idx}")
+        assembly.save(save_path, exportType="STEP")
+        return "Success"
+    else:
+        return "Empty"  # 对应 Import 文件或纯约束草图
 
-        # 导出逻辑
-        if solids_collection:
-            assembly = cq.Assembly()
-            for idx, obj in enumerate(solids_collection):
-                assembly.add(obj, name=f"obj_{idx}")
-            assembly.save(save_path, exportType="STEP")
-            return "Success"
-        else:
-            return "Empty"  # 对应 Import 文件或纯约束草图
 
-    except Exception as e:
-        return f"Error: {str(e)}"
+def save_part():
+    # def _sign_request(_method, _url, _body=""):
+    #     nonce = str(int(time.time() * 1000))
+    #     message = f"{_method}\n{_url}\n{nonce}\n{_body}"
+    #     signature = base64.b64encode(
+    #         hmac.new(SECRET_KEY.encode(), message.encode(), hashlib.sha256).digest()
+    #     ).decode()
+    #     _headers = {
+    #         "Authorization": f"Onshape {ACCESS_KEY}:{signature}",
+    #         "On-Nonce": nonce,
+    #         "Content-Type": "application/json"
+    #     }
+    #     return _headers
+    #
+    # try:
+    #     did = "0fb260c8b827a43090cdfa3f"
+    #     wid = "8fc46c0a7118148bbe998cd1"
+    #
+    #     url = f"{BASE_URL}/api/documents/{did}/copy"
+    #     body = json.dumps({
+    #         "name": "MyCopiedAssembly",
+    #         "workspaceId": wid
+    #     })
+    #
+    #     headers = _sign_request("POST", url.replace(BASE_URL, ""), body)
+    #
+    #     resp = requests.post(url, headers=headers, data=body)
+    #     print(resp.json())
+    #     print('save public models successfully')
+    #
+    # except Exception as e:
+    #     print(f'exception occurred: {e}')
+    def sign_request(method, path, body=""):
+        nonce = str(int(time.time() * 1000))
+        message = method + "\n" + path + "\n" + nonce + "\n" + body
+
+        signature = base64.b64encode(
+            hmac.new(SECRET_KEY.encode('utf-8'),
+                     message.encode('utf-8'),
+                     hashlib.sha256).digest()
+        ).decode('utf-8')
+
+        return {
+            "Authorization": f"Onshape {ACCESS_KEY}:{signature}",
+            "On-Nonce": nonce,
+            "Content-Type": "application/json"
+        }
+
+    # 你给的文档
+    did = "0fb260c8b827a43090cdfa3f"
+    wid = "8fc46c0a7118148bbe998cd1"
+
+    path = f"/api/documents/{did}/copy"
+    url = BASE_URL + path
+
+    body_dict = {
+        "name": "MyCopiedAssembly",
+        "workspaceId": wid
+    }
+    body = json.dumps(body_dict)
+
+    # ⚠️ 关键：body 必须参与签名
+    headers = sign_request("POST", path, body)
+
+    resp = requests.post(url, headers=headers, data=body)
+
+    print(resp.status_code)
+    print(resp.text)
+
+    onshape_client.Client()
+
 
 
 def main():

@@ -202,7 +202,7 @@ def basename_without_ext(file_name):
     return name
 
 
-def flatten_folder(folder_A):
+def flatten_folder(folder_A, is_remove_empty):
     """
     遍历文件夹 A 下 所有子文件夹（多级也可以）
     将其中所有文件 移动到 A 目录下
@@ -239,6 +239,9 @@ def flatten_folder(folder_A):
             # 移动
             shutil.move(old_path, new_path)
             # print(f"Moved: {old_path} → {new_path}")
+
+    if is_remove_empty:
+        remove_empty_dirs(folder_A)
 
 
 def remove_empty_dirs(root):
@@ -306,7 +309,8 @@ if __name__ == '__main__':
     #     print('processing folder: ', c_subdir_full)
     #     # flatten_folder(c_subdir_full)
     #     remove_empty_dirs(c_subdir_full)
-    translate_class_folder(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad\model_3d')
+    # translate_class_folder(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad\model_3d')
+    flatten_folder(r'D:\document\DeepLearning\DataSet\ABC\abc_0000_stat_v00', True)
 
     pass
 
