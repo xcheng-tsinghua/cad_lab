@@ -23,11 +23,11 @@ import random
 import mimetypes
 import base64
 import hashlib
-import datetime
+from datetime import datetime, timezone
 import urllib
 import hmac
 import requests
-
+from msgpack import dump
 
 EXTENT_TYPE_MAP = {'BLIND': 'OneSideFeatureExtentType', 'SYMMETRIC': 'SymmetricFeatureExtentType'}
 OPERATION_MAP = {'NEW': 'NewBodyFeatureOperation', 'ADD': 'JoinFeatureOperation',
@@ -140,7 +140,7 @@ class Onshape(object):
         return auth
 
     def _make_headers(self, method, path, query={}, headers={}):
-        '''
+        """
         Creates a headers object to sign the request
 
         Args:
@@ -151,9 +151,8 @@ class Onshape(object):
 
         Returns:
             - dict: Dictionary containing all headers
-        '''
-
-        date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        """
+        date = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
         nonce = self._make_nonce()
         ctype = headers.get('Content-Type') if headers.get('Content-Type') else 'application/json'
 
@@ -194,10 +193,9 @@ class Onshape(object):
             base_url = self._url
         url = base_url + path + '?' + urllib.parse.urlencode(query)
 
-
-        print('body:', body)
-        print('req_headers:', req_headers)
-        print('request url: ' + url)
+        # print('body:', body)
+        # print('req_headers:', req_headers)
+        # print('request url: ' + url)
 
         # only parse as json string if we have to
         body = json.dumps(body) if type(body) == dict else body
@@ -217,10 +215,14 @@ class Onshape(object):
                 new_query[key] = querystring[key][0]  # won't work for repeated query params
 
             return self.request(method, location.path, query=new_query, headers=headers, base_url=new_base_url)
+
         elif not 200 <= res.status_code <= 206:
-            print('request failed, details: ' + res.text, level=1)
+            # print('request failed, details: ' + res.text)
+            print('request failed')
+
         else:
-            print('request succeeded, details: ' + res.text)
+            # print('request succeeded, details: ' + res.text)
+            print('request succeeded')
 
         return res
 
@@ -544,17 +546,21 @@ class MyClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
         res_msg = res.json()['result']['message']['value']
+
+        # with open(r'D:\document\DeepLearningIdea\multi_cmd_seq_gen\ofsfea.json', 'w') as f:
+        #     json.dump(res_msg, f, ensure_ascii=False, indent=4)
+
         topo = {}
         for item in res_msg:
             item_msg = item['message']
-            k_str = item_msg['key']['message']['value'].encode('utf-8')  # faces, edges
+            k_str = item_msg['key']['message']['value']  # faces, edges
             v_item = item_msg['value']['message']['value']
             outer_list = []
             for item_x in v_item:
                 v_item_x = item_x['message']['value']
                 geo_dict = {}
                 for item_y in v_item_x:
-                    k = item_y['message']['key']['message']['value'].encode('utf-8')  # id, edges/vertices
+                    k = item_y['message']['key']['message']['value']  # id, edges/vertices
                     v_msg = item_y['message']['value']
                     if k == 'param':
                         if k_str == 'faces':
@@ -566,12 +572,13 @@ class MyClient(Client):
                         else:
                             raise ValueError
                     elif isinstance(v_msg['message']['value'], list):
-                        v = [a['message']['value'].encode('utf-8') for a in v_msg['message']['value']]
+                        v = [a['message']['value'] for a in v_msg['message']['value']]
                     else:
-                        v = v_msg['message']['value'].encode('utf-8')
+                        v = v_msg['message']['value']
                     geo_dict.update({k: v})
                 outer_list.append(geo_dict)
             topo.update({k_str: outer_list})
+
         return topo
 
     @staticmethod
@@ -715,7 +722,7 @@ class MyClient(Client):
         return res
 
     def eval_boundingBox(self, did, wid, eid):
-        '''
+        """
         Get bounding box of all solid bodies for specified document / workspace / part studio.
 
         Args:
@@ -725,7 +732,7 @@ class MyClient(Client):
 
         Returns:
             - dict: {'maxCorner': [], 'minCorner': []}
-        '''
+        """
         body = {
             "script":
                 "function(context is Context, queries) { " +
@@ -800,19 +807,21 @@ class MyClient(Client):
             "queries": []
         }
 
-        res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid +
-                             '/featurescript', body=body).json()
+        res = self._api.request('post',
+                                '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
+                                body=body).json()
         return res['result']['message']['value']
 
 
 class FeatureListParser(object):
-    def __init__(self, client, did, wid, eid):
+    def __init__(self, client, did, wid, eid, feature_list=None):
         """
         A parser for OnShape feature list (construction sequence)
         :param client:
         :param did:
         :param wid:
         :param eid:
+        :param feature_list:
         """
         self.client = client
 
@@ -820,7 +829,13 @@ class FeatureListParser(object):
         self.wid = wid
         self.eid = eid
 
-        self.feature_list = self.client.get_features(did, wid, eid).json()
+        if feature_list is None:
+            print('get feature_list by onshape_api request')
+            self.feature_list = self.client.get_features(did, wid, eid).json()
+        else:
+            print('load feature_list')
+            self.feature_list = feature_list
+
         self.profile2sketch = {}
 
     @staticmethod
@@ -935,6 +950,7 @@ class FeatureListParser(object):
         only sketch and extrusion are supported.
         """
         result = {"entities": OrderedDict(), "properties": {}, "sequence": []}
+
         try:
             bbox = self._parse_boundingBox()
         except Exception as e:
@@ -1167,7 +1183,7 @@ class SketchParser(object):
         return entity_dict
 
 
-def process_one(data_id, link, save_path, is_load_ofs=False):
+def process_one(link, is_load_ofs):
     """
     data_id: model number
     link: model link on onShape
@@ -1181,40 +1197,40 @@ def process_one(data_id, link, save_path, is_load_ofs=False):
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
     # filter data that use operations other than sketch + extrude
+    ofs_json_file = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
+    if is_load_ofs:
+        with open(ofs_json_file, 'r') as f:
+            ofs_data = json.load(f)
+    else:
+        ofs_data = onshape_client.get_features(did, wid, eid).json()
+        try:
+            with open(ofs_json_file, 'w') as f:
+                json.dump(ofs_data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(e)
+            exit(0)
+
+    # 如果存在除了拉伸之外的命令，直接跳过
+    for item in ofs_data['features']:
+        if item['message']['featureType'] not in ['newSketch', 'extrude']:
+            return 0
+
+    # except Exception as e:
+    #     print(f'contain unsupported features: {e}')
+    #     return 0
+
     try:
-        ofs_json_file = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
-        if is_load_ofs:
-            with open(ofs_json_file, 'r') as f:
-                ofs_data = json.load(f)
-        else:
-            ofs_data = onshape_client.get_features(did, wid, eid).json()
-            try:
-                with open(ofs_json_file, 'w') as f:
-                    json.dump(ofs_data, f, ensure_ascii=False, indent=4)
-            except Exception as e:
-                print(e)
-                exit(0)
-
-        # 如果存在除了拉伸之外的命令，直接跳过
-        for item in ofs_data['features']:
-            if item['message']['featureType'] not in ['newSketch', 'extrude']:
-                return 0
-
-    except Exception as e:
-        print(f'[{data_id}], contain unsupported features: {e}')
-        return 0
-
-    try:
-        parser = FeatureListParser(onshape_client, did, wid, eid)
+        parser = FeatureListParser(onshape_client, did, wid, eid, ofs_data)
         result = parser.parse()
+
     except Exception as e:
-        print(f'[{data_id}], feature parsing fails: {e}')
+        print(f'feature parsing fails: {e}')
         return 0
+
     if len(result["sequence"]) < 2:
         return 0
-    with open(save_path, 'w') as fp:
-        json.dump(result, fp, indent=1)
-    return len(result["sequence"])
+
+    return result
 
 
 def process_batch(source_dir, target_dir):
@@ -1260,7 +1276,7 @@ def test():
         print(data_id)
 
         try:
-            process_one(data_id, link, fr'E:\document\DeeplearningIdea\multi_cmd_seq_gen\gen_ofs_{data_id}.json')
+            process_one(link, True)
         except Exception as e:
             print(f'exception: {e}')
 
