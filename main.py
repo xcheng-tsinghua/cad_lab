@@ -13,7 +13,7 @@ from PIL import Image
 from pathlib import Path
 import requests
 from requests.auth import HTTPBasicAuth
-from onshape_client.client import Client
+# from onshape_client.client import Client
 
 
 ## draw_para_net
