@@ -1,11 +1,16 @@
-# import sys, os
-# print("script dir: ", __file__)
-# print("work dir: ", os.getcwd())
-# print("sys.path[0]: ", sys.path[0])
-# import cad_parser
-# print("parser object: ", parser)
-# print("parser.__file__ is_exist: ", hasattr(parser, '__file__'))
+"""
+登录onshape的配置文件：
+./config/onshape_credit.json
 
+文件内容示例：
+{
+    "https://cad.onshape.com": {
+        "access_key": "your_access_key",
+        "secret_key": "your_secret_key"
+    }
+}
+
+"""
 
 import os
 import yaml
@@ -13,7 +18,6 @@ import json
 import numpy as np
 import argparse
 from joblib import delayed, Parallel
-# from onshape_client.client import Client
 import copy
 from collections import OrderedDict
 import math
@@ -29,14 +33,6 @@ import urllib
 import hmac
 import requests
 
-# from urllib.parse import urlparse
-# from urllib.parse import parse_qs
-
-# import cad_parser
-# print(cad_parser.__file__)
-
-# from cad_parser import FeatureListParser
-# from cad_myclient import MyClient
 
 EXTENT_TYPE_MAP = {'BLIND': 'OneSideFeatureExtentType', 'SYMMETRIC': 'SymmetricFeatureExtentType'}
 OPERATION_MAP = {'NEW': 'NewBodyFeatureOperation', 'ADD': 'JoinFeatureOperation',
@@ -130,8 +126,7 @@ def log(msg, level=0):
     logger.log(lvl, msg)
 
 
-
-class Onshape():
+class Onshape(object):
     '''
     Provides access to the Onshape REST API.
 
@@ -318,8 +313,7 @@ class Onshape():
         return res
 
 
-
-class Client():
+class Client(object):
     '''
     Defines methods for testing the Onshape API. Comes with several methods:
 
@@ -889,6 +883,7 @@ class MyClient(Client):
                              '/featurescript', body=body).json()
         return res['result']['message']['value']
 
+
 class FeatureListParser(object):
     """A parser for OnShape feature list (construction sequence)"""
     def __init__(self, client, did, wid, eid, data_id=None):
@@ -1234,36 +1229,35 @@ class SketchParser(object):
         return entity_dict
 
 
-def process_one(data_id, link, save_dir):
+def process_one(data_id, link, save_path, is_load_ofs=True):
     """
     data_id: model number
     link: model link on onShape
     save_dir: parsed data save dir
+    is_load_ofs: 是否直接从文件读取序列，而不是通过 onshape_api request?
     """
     # create instance of the OnShape client; change key to test on another stack
-    c = MyClient()
-
-    save_path = os.path.join(save_dir, "{}.json".format(data_id))
-    # if os.path.exists(save_path):
-    #     return 1
+    onshape_client = MyClient()
 
     v_list = link.split("/")
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
     # filter data that use operations other than sketch + extrude
     try:
-        ofs_data = c.get_features(did, wid, eid).json()
+        ofs_json_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
+        if is_load_ofs:
+            ofs_data = onshape_client.get_features(did, wid, eid).json()
 
-        try:
-            with open(r"E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json", "w") as f:
-                json.dump(ofs_data, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print(e)
-            exit(0)
+            try:
+                with open(ofs_json_file, 'w') as f:
+                    json.dump(ofs_data, f, ensure_ascii=False, indent=4)
+            except Exception as e:
+                print(e)
+                exit(0)
 
-        # for i in range(len(ofs_data)):
-        #     with open(rf"E:\document\DeeplearningIdea\multi_cmd_seq_gen\{i}.json", "w", encoding="utf-8") as f:
-        #         json.dump(ofs_data[i], f, ensure_ascii=False, indent=4)
+        else:
+            with open(ofs_json_file, 'r') as f:
+                ofs_data = json.load(f)
 
         for item in ofs_data['features']:
             if item['message']['featureType'] not in ['newSketch', 'extrude']:
@@ -1274,7 +1268,7 @@ def process_one(data_id, link, save_dir):
 
     # parse detailed cad operations
     try:
-        parser = FeatureListParser(c, did, wid, eid, data_id=data_id)
+        parser = FeatureListParser(onshape_client, did, wid, eid, data_id=data_id)
         result = parser.parse()
     except Exception as e:
         print("[{}], feature parsing fails:".format(data_id), e)
@@ -1286,64 +1280,57 @@ def process_one(data_id, link, save_dir):
     return len(result["sequence"])
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--test", default='True', type=str, choices=['True', 'False'], help="test with some examples")
-    parser.add_argument("--link_data_folder", default=None, type=str, help="data folder of onshape links from ABC dataset")
-    args = parser.parse_args()
+def process_batch(source_dir, target_dir):
+    """
+    处理一个文件夹下全部的序列文件
+    :param source_dir:
+    :param target_dir:
+    :return:
+    """
+    DWE_DIR = source_dir
+    DATA_ROOT = os.path.dirname(DWE_DIR)
+    filenames = sorted(os.listdir(DWE_DIR))
+    for name in filenames:
+        truck_id = name.split('.')[0].split('_')[-1]
+        print("Processing truck: {}".format(truck_id))
 
-    return args
-
-
-def main():
-    args = parse_args()
-
-    if eval(args.test):
-
-        data_examples = {
-            '00000352': 'https://cad.onshape.com/documents/4185972a944744d8a7a0f2b4/w/d82d7eef8edf4342b7e49732/e/b6d6b562e8b64e7ea50d8325',
-            # '00001272': 'https://cad.onshape.com/documents/b53ece83d8964b44bbf1f8ed/w/6b2f1aad3c43402c82009c85/e/91cb13b68f164c2eba845ce6',
-            # '00001616': 'https://cad.onshape.com/documents/8c3b97c1382c43bab3eb1b48/w/43439c4e192347ecbf818421/e/63b575e3ac654545b571eee6',
-            }
-        save_dir = "examples"
+        save_dir = os.path.join(DATA_ROOT, "processed/{}".format(truck_id))
         if not os.path.exists(save_dir):
-            os.mkdir(save_dir)
-        for data_id, link in data_examples.items():
-            print(data_id)
+            os.makedirs(save_dir)
 
-            try:
-                process_one(data_id, link, save_dir)
-            except Exception as e:
-                print(f'exception: {e}')
+        dwe_path = os.path.join(DWE_DIR, name)
+        with open(dwe_path, 'r') as fp:
+            dwe_data = yaml.safe_load(fp)
 
-    else:
-        DWE_DIR = args.link_data_folder
-        DATA_ROOT = os.path.dirname(DWE_DIR)
-        filenames = sorted(os.listdir(DWE_DIR))
-        for name in filenames:
-            truck_id = name.split('.')[0].split('_')[-1]
-            print("Processing truck: {}".format(truck_id))
-
-            save_dir = os.path.join(DATA_ROOT, "processed/{}".format(truck_id))
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-
-            dwe_path = os.path.join(DWE_DIR, name)
-            with open(dwe_path, 'r') as fp:
-                dwe_data = yaml.safe_load(fp)
-
-            total_n = len(dwe_data)
-            count = Parallel(n_jobs=10, verbose=2)(delayed(process_one)(data_id, link, save_dir)
-                                                   for data_id, link in dwe_data.items())
-            count = np.array(count)
-            print("valid: {}\ntotal:{}".format(np.sum(count > 0), total_n))
-            print("distribution:")
-            for n in np.unique(count):
-                print(n, np.sum(count == n))
+        total_n = len(dwe_data)
+        count = Parallel(n_jobs=10, verbose=2)(delayed(process_one)(data_id, link, save_dir)
+                                               for data_id, link in dwe_data.items())
+        count = np.array(count)
+        print("valid: {}\ntotal:{}".format(np.sum(count > 0), total_n))
+        print("distribution:")
+        for n in np.unique(count):
+            print(n, np.sum(count == n))
 
 
-if __name__ == '__main__':
-    main()
+def test():
+    data_examples = {
+        '00000352': 'https://cad.onshape.com/documents/4185972a944744d8a7a0f2b4/w/d82d7eef8edf4342b7e49732/e/b6d6b562e8b64e7ea50d8325',
+        # '00001272': 'https://cad.onshape.com/documents/b53ece83d8964b44bbf1f8ed/w/6b2f1aad3c43402c82009c85/e/91cb13b68f164c2eba845ce6',
+        # '00001616': 'https://cad.onshape.com/documents/8c3b97c1382c43bab3eb1b48/w/43439c4e192347ecbf818421/e/63b575e3ac654545b571eee6',
+    }
+
+    for data_id, link in data_examples.items():
+        print(data_id)
+
+        try:
+            process_one(data_id, link, fr'E:\document\DeeplearningIdea\multi_cmd_seq_gen\gen_ofs_{data_id}.json')
+        except Exception as e:
+            print(f'exception: {e}')
+
+
+
+
+
 
 
 

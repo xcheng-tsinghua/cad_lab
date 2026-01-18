@@ -591,7 +591,7 @@ def get_default_plane_id():
 
 
 def test_deepcad_onshape_parser():
-    onshape_seq_parser.main()
+    onshape_seq_parser.test()
 
 
 if __name__ == '__main__':
