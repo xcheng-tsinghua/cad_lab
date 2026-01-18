@@ -16,7 +16,6 @@ import os
 import yaml
 import json
 import numpy as np
-import argparse
 from joblib import delayed, Parallel
 import copy
 from collections import OrderedDict
@@ -39,28 +38,33 @@ OPERATION_MAP = {'NEW': 'NewBodyFeatureOperation', 'ADD': 'JoinFeatureOperation'
                  'REMOVE': 'CutFeatureOperation', 'INTERSECT': 'IntersectFeatureOperation'}
 
 
-def xyz_list2dict(l):
-    return OrderedDict({'x':l[0], 'y':l[1], 'z':l[2]})
+def xyz_list2dict(xyz):
+    return OrderedDict({'x': xyz[0], 'y': xyz[1], 'z': xyz[2]})
 
 
 def angle_from_vector_to_x(vec):
-    angle = 0.0
+    """
+    对于输入的2维单位向量 vec，确定其与 (0, 1) 之间的夹角
     # 2 | 1
     # -------
     # 3 | 4
+
+    :param vec:
+    :return:
+    """
     if vec[0] >= 0:
         if vec[1] >= 0:
-            # Qadrant 1
+            # 第 1 象限
             angle = math.asin(vec[1])
         else:
-            # Qadrant 4
+            # 第 4 象限
             angle = 2.0 * math.pi - math.asin(-vec[1])
     else:
         if vec[1] >= 0:
-            # Qadrant 2
+            # 第 2 象限
             angle = math.pi - math.asin(vec[1])
         else:
-            # Qadrant 3
+            # 第 3 象限
             angle = math.pi + math.asin(-vec[1])
     return angle
 
@@ -886,15 +890,21 @@ class MyClient(Client):
 
 class FeatureListParser(object):
     """A parser for OnShape feature list (construction sequence)"""
-    def __init__(self, client, did, wid, eid, data_id=None):
-        self.c = client
+    def __init__(self, client, did, wid, eid):
+        """
+
+        :param client:
+        :param did:
+        :param wid:
+        :param eid:
+        """
+        self.client = client
 
         self.did = did
         self.wid = wid
         self.eid = eid
-        self.data_id = data_id
 
-        self.feature_list = self.c.get_features(did, wid, eid).json()
+        self.feature_list = self.client.get_features(did, wid, eid).json()
 
         self.profile2sketch = {}
 
@@ -919,12 +929,12 @@ class FeatureListParser(object):
         return param_dict
 
     def _parse_sketch(self, feature_data):
-        sket_parser = SketchParser(self.c, feature_data, self.did, self.wid, self.eid)
+        sket_parser = SketchParser(self.client, feature_data, self.did, self.wid, self.eid)
         save_dict = sket_parser.parse_to_fusion360_format()
         return save_dict
 
     def _expr2meter(self, expr):
-        return self.c.expr2meter(self.did, self.wid, self.eid, expr)
+        return self.client.expr2meter(self.did, self.wid, self.eid, expr)
 
     def _locateSketchProfile(self, geo_ids):
         return [{"profile": k, "sketch": self.profile2sketch[k]} for k in geo_ids]
@@ -998,7 +1008,7 @@ class FeatureListParser(object):
         return save_dict
 
     def _parse_boundingBox(self):
-        bbox_info = self.c.eval_boundingBox(self.did, self.wid, self.eid)
+        bbox_info = self.client.eval_boundingBox(self.did, self.wid, self.eid)
         result = {"type": "BoundingBox3D",
                   "max_point": xyz_list2dict(bbox_info['maxCorner']),
                   "min_point": xyz_list2dict(bbox_info['minCorner'])}
@@ -1041,7 +1051,7 @@ class FeatureListParser(object):
 class SketchParser(object):
     """A parser for OnShape sketch feature list"""
     def __init__(self, client, feat_data, did, wid, eid, data_id=None):
-        self.c = client
+        self.client = client
         self.feat_id = feat_data['featureId']
         self.feat_name = feat_data['name']
         self.feat_param = FeatureListParser.parse_feature_param(feat_data['parameters'])
@@ -1052,10 +1062,10 @@ class SketchParser(object):
         self.data_id = data_id
 
         geo_id = self.feat_param["sketchPlane"][0]
-        response = self.c.get_entity_by_id(did, wid, eid, [geo_id], "FACE")
-        self.plane = self.c.parse_face_msg(response.json()['result']['message']['value'])[0]
+        response = self.client.get_entity_by_id(did, wid, eid, [geo_id], "FACE")
+        self.plane = self.client.parse_face_msg(response.json()['result']['message']['value'])[0]
 
-        self.geo_topo = self.c.eval_sketch_topology_by_adjacency(did, wid, eid, self.feat_id)
+        self.geo_topo = self.client.eval_sketch_topology_by_adjacency(did, wid, eid, self.feat_id)
         self._to_local_coordinates()
         self._build_lookup()
 
@@ -1164,7 +1174,7 @@ class SketchParser(object):
             sweep_angle = abs(start_angle - end_angle)
 
             # # decide direction arc by curve length
-            # edge_len = self.c.eval_curveLength(self.did, self.wid, self.eid, edge_id)
+            # edge_len = self.client.eval_curveLength(self.did, self.wid, self.eid, edge_id)
             # _len = sweep_angle * radius
             # _len_other = (2 * np.pi - sweep_angle) * radius
             # if abs(edge_len - _len) > abs(edge_len - _len_other):
@@ -1172,7 +1182,7 @@ class SketchParser(object):
             #     start_vec = end_vec
 
             # decide direction by middle point
-            midpoint = self.c.eval_curve_midpoint(self.did, self.wid, self.eid, edge_id)
+            midpoint = self.client.eval_curve_midpoint(self.did, self.wid, self.eid, edge_id)
             mid_vec = np.array(midpoint) - self.origin
             mid_vec = np.array([np.dot(mid_vec, self.x_axis), np.dot(mid_vec, self.y_axis), np.dot(mid_vec, self.z_axis)])
             mid_vec = mid_vec - np.array(edge_data["param"]["coordSystem"]["origin"])
