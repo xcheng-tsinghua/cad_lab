@@ -184,21 +184,21 @@ class PointOfParamPCD(gp_Pnt):
         self.nor = normal_at(self, self.aligned_face)
 
     def get_save_str(self, is_contain_xyz=True):
-        if is_contain_xyz:
-            save_str = (f'{self.X()} {self.Y()} {self.Z()} ' +  # 坐标
-                        f'{self.pmt} ' +  # 基元类型
-                        f'{self.dir.X()} {self.dir.Y()} {self.dir.Z()} ' +  # 主方向
-                        f'{self.dim} ' +  # 主尺寸
-                        f'{self.nor.X()} {self.nor.Y()} {self.nor.Z()} ' +  # 法线
-                        f'{self.loc.X()} {self.loc.Y()} {self.loc.Z()} ' +  # 主位置
-                        f'{self.prim_idx}\n')  # 基元索引
-        else:
-            save_str = (f'{self.pmt} ' +  # 基元类型
-                        f'{self.dir.X()} {self.dir.Y()} {self.dir.Z()} ' +  # 主方向
-                        f'{self.dim} ' +  # 主尺寸
-                        f'{self.nor.X()} {self.nor.Y()} {self.nor.Z()} ' +  # 法线
-                        f'{self.loc.X()} {self.loc.Y()} {self.loc.Z()} ' +  # 主位置
-                        f'{self.prim_idx}\n')  # 基元索引
+        # if is_contain_xyz:
+        save_str = (f'{self.X():.6f} {self.Y():.6f} {self.Z():.6f} ' +  # 坐标
+                    f'{self.pmt:d} ' +  # 基元类型
+                    f'{self.dir.X():.6f} {self.dir.Y():.6f} {self.dir.Z():.6f} ' +  # 主方向
+                    f'{self.dim:.6f} ' +  # 主尺寸
+                    f'{self.nor.X():.6f} {self.nor.Y():.6f} {self.nor.Z():.6f} ' +  # 法线
+                    f'{self.loc.X():.6f} {self.loc.Y():.6f} {self.loc.Z():.6f} ' +  # 主位置
+                    f'{self.prim_idx:d}\n')  # 基元索引
+        # else:
+        #     save_str = (f'{self.pmt} ' +  # 基元类型
+        #                 f'{self.dir.X()} {self.dir.Y()} {self.dir.Z()} ' +  # 主方向
+        #                 f'{self.dim} ' +  # 主尺寸
+        #                 f'{self.nor.X()} {self.nor.Y()} {self.nor.Z()} ' +  # 法线
+        #                 f'{self.loc.X()} {self.loc.Y()} {self.loc.Z()} ' +  # 主位置
+        #                 f'{self.prim_idx}\n')  # 基元索引
 
         return save_str
 
@@ -881,10 +881,9 @@ def step2pcd(step_path, save_path, n_points=2000, deflection=1e-4, with_cst=True
                     elif print_log:
                         print(f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
 
-                except:
+                except Exception as e:
                     if print_log:
-                        print(
-                            f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip')
+                        print(f'find a point({current_point.X()}, {current_point.Y()}, {current_point.Z()}) without aligned face, skip. Exception: {e}')
 
     else:
         np.savetxt(save_path, vertex_matrix, fmt='%.6f')
@@ -1100,7 +1099,7 @@ def step2pcd_abc(dir_path, n_points=2650, is_load_progress=True, xyz_only=False,
     save_finish2json(trans_progress)
 
 
-def step2pcd_batched_multi_processing_wrapper(c_step, source_dir, target_dir, n_points, deflection):
+def step2pcd_batched_multi_processing_wrapper(c_step, source_dir, target_dir, n_points, deflection, with_cst):
     """
     辅助进行多进程处理函数
     :param c_step:
@@ -1108,18 +1107,19 @@ def step2pcd_batched_multi_processing_wrapper(c_step, source_dir, target_dir, n_
     :param target_dir:
     :param n_points:
     :param deflection:
+    :param with_cst:
     :return:
     """
     pcd_path = c_step.replace(source_dir, target_dir)
     pcd_path = os.path.splitext(pcd_path)[0] + '.txt'
 
     try:
-        step2pcd(c_step, pcd_path, n_points, deflection, False, False, False, True)
-    except:
-        print(f'cannot convert this STEP file: {c_step}.')
+        step2pcd(c_step, pcd_path, n_points, deflection, with_cst, False, False, True)
+    except Exception as e:
+        print(f'cannot convert this STEP file: {c_step}. Exception: {e}')
 
 
-def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers):
+def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers, with_cst=True):
     """
     将 source_dir 下的 STEP 转化为 target_dir 下的点云，两者具备相同的目录层级结构
     :param source_dir:
@@ -1127,6 +1127,7 @@ def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers):
     :param n_points:
     :param deflection:
     :param workers: 进程数
+    :param with_cst: 生成的点云是否包含约束
     :return:
     """
 
@@ -1166,7 +1167,8 @@ def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers):
         source_dir=source_dir,
         target_dir=target_dir,
         n_points=n_points,
-        deflection=deflection
+        deflection=deflection,
+        with_cst=with_cst
     )
 
     with Pool(processes=workers) as pool:

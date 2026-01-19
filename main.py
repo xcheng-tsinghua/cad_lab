@@ -1,4 +1,5 @@
 import os.path
+import random
 import shutil
 
 import numpy as np
@@ -258,8 +259,9 @@ def divided_to_sketch_and_photo():
 
 def vis_pcd_gen():
     # 生成测试的点云
-    stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\cube_div.STEP'
+    # stepfile = r'C:\Users\ChengXi\Desktop\cstnet2\cube_div.STEP'
     # stepfile = r'F:\document\deeplearning\Param20K_Extend\test\bearing\01447962.STEP'
+    stepfile = r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP\train\rivet\trans13120.STEP'
     pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
     #
     step_proc.step2pcd(stepfile, pcd_file, 2000, is_normalize=False)
@@ -288,7 +290,8 @@ def vis_pcd_gen():
 
     print(f'xmax {xyz[:, 0].max()}, xmin {xyz[:, 0].min()}, ymax {xyz[:, 1].max()}, ymin {xyz[:, 1].min()}, zmax {xyz[:, 2].max()}, zmin {xyz[:, 2].min()}')
 
-    vis.vis_pcd_with_attr(xyz, None, affil_idx)
+    show_pnt_attr(xyz, affil_idx)
+    # vis.vis_pcd_with_attr(xyz, None, affil_idx)
     # vis.vis_pcd_plt(xyz, loc)
 
 
@@ -352,14 +355,20 @@ def acc_correct2():
         print(f'{c_val}, {c_val_new: .5f}')
 
 
-def sketch_proj_select_subset(src_folder, dst_folder):
+def sketch_proj_select_subset(src_folder, dst_folder, max_nsave_cat = 10):
+    """
+    用于草图项目，在数据集中选择一个子集
+    :param src_folder:
+    :param dst_folder:
+    :param max_nsave_cat:
+    :return:
+    """
+
     # 在目标文件夹下创建类似的文件夹结构
     utils.create_tree_like(src_folder, dst_folder)
 
     # 获取全部类别
     cls_all = utils.get_subdirs(os.path.join(src_folder, 'model_3d'))
-
-    max_nsave_cat = 10
 
     for c_cls in cls_all:
         c_save_cat = 0
@@ -594,6 +603,95 @@ def test_deepcad_onshape_parser():
     onshape_seq_parser.test()
 
 
+def vis_cst_pcd():
+    """
+    可视化某个文件夹下的带约束的点云
+    :return:
+    """
+    target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train'
+
+    # 获取全部文件
+    all_pcd = utils.get_allfiles(target_dir)
+
+    # 打乱文件
+    random.shuffle(all_pcd)
+
+    for c_pcd in all_pcd:
+        vis_cst_pcd_single(c_pcd)
+
+
+def vis_cst_pcd_single(target_pcd):
+    """
+    可视化某个文件夹下的带约束的点云
+    :return:
+    """
+    pnts_all = np.loadtxt(target_pcd)
+
+    xyz = pnts_all[:, :3]
+    pmt = pnts_all[:, 3].astype(np.int32)
+    mad = pnts_all[:, 4:7]
+    dim = pnts_all[:, 7]
+    nor = pnts_all[:, 8:11]
+    loc = pnts_all[:, 11:14]
+    affil_idx = pnts_all[:, 14].astype(np.int32)
+
+    # vis.vis_pcd_with_attr(xyz, None, affil_idx)
+    show_pnt_attr(xyz, affil_idx, target_pcd)
+
+
+def show_pnt_attr(points, attr, title=None):
+    # n = 1000
+    # points = np.random.randn(n, 3)
+    # attr = np.random.randint(0, 10, size=n)  # 离散属性
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+
+    sc = ax.scatter(
+        points[:, 0],
+        points[:, 1],
+        points[:, 2],
+        c=attr,              # 关键：属性作为颜色
+        cmap='tab10',        # 离散属性推荐 tab10 / tab20
+        s=5                  # 点大小
+    )
+
+    plt.colorbar(sc, ax=ax, label='Attribute')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title(title)
+
+    set_axes_equal(ax)
+
+    plt.show()
+
+
+def set_axes_equal(ax):
+    """
+    Make 3D axes have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc.
+    """
+    x_limits = ax.get_xlim3d()
+    y_limits = ax.get_ylim3d()
+    z_limits = ax.get_zlim3d()
+
+    x_range = x_limits[1] - x_limits[0]
+    y_range = y_limits[1] - y_limits[0]
+    z_range = z_limits[1] - z_limits[0]
+
+    x_middle = np.mean(x_limits)
+    y_middle = np.mean(y_limits)
+    z_middle = np.mean(z_limits)
+
+    plot_radius = 0.5 * max([x_range, y_range, z_range])
+
+    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+
+
+
 if __name__ == '__main__':
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255, 255, 255), 4)
     # vis.vis_cls_log(r'C:\Users\ChengXi\Desktop\cstnet2\pnet2_geomloss.txt')
@@ -631,7 +729,11 @@ if __name__ == '__main__':
 
     # test_parse_onshape()
 
-    test_deepcad_onshape_parser()
+    # test_deepcad_onshape_parser()4R2437.txt
+
+    # vis_cst_pcd()
+    # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
+    vis_pcd_gen()
 
     pass
 
