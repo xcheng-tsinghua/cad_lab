@@ -4,12 +4,10 @@
 
 文件内容示例：
 {
-    "https://cad.onshape.com": {
-        "access_key": "your_access_key",
-        "secret_key": "your_secret_key"
-    }
+  "onshape_url": "https://cad.onshape.com",
+  "access_key": "your_access_key",
+  "secret_key": "your_secret_key"
 }
-
 """
 
 import os
@@ -25,13 +23,11 @@ import random
 import mimetypes
 import base64
 import hashlib
-import logging
-from logging.config import dictConfig
-import datetime
+from datetime import datetime, timezone
 import urllib
 import hmac
 import requests
-
+from msgpack import dump
 
 EXTENT_TYPE_MAP = {'BLIND': 'OneSideFeatureExtentType', 'SYMMETRIC': 'SymmetricFeatureExtentType'}
 OPERATION_MAP = {'NEW': 'NewBodyFeatureOperation', 'ADD': 'JoinFeatureOperation',
@@ -69,135 +65,55 @@ def angle_from_vector_to_x(vec):
     return angle
 
 
-def log(msg, level=0):
-    '''
-    Logs a message to the console, with optional level paramater
-
-    Args:
-        - msg (str): message to send to console
-        - level (int): log level; 0 for info, 1 for error (default = 0)
-    '''
-
-    red = '\033[91m'
-    endc = '\033[0m'
-
-    # configure the logging module
-    cfg = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'stdout': {
-                'format': '[%(levelname)s]: %(asctime)s - %(message)s',
-                'datefmt': '%x %X'
-            },
-            'stderr': {
-                'format': red + '[%(levelname)s]: %(asctime)s - %(message)s' + endc,
-                'datefmt': '%x %X'
-            }
-        },
-        'handlers': {
-            'stdout': {
-                'class': 'logging.StreamHandler',
-                'level': 'DEBUG',
-                'formatter': 'stdout'
-            },
-            'stderr': {
-                'class': 'logging.StreamHandler',
-                'level': 'ERROR',
-                'formatter': 'stderr'
-            }
-        },
-        'loggers': {
-            'info': {
-                'handlers': ['stdout'],
-                'level': 'INFO',
-                'propagate': True
-            },
-            'error': {
-                'handlers': ['stderr'],
-                'level': 'ERROR',
-                'propagate': False
-            }
-        }
-    }
-
-    dictConfig(cfg)
-
-    lg = 'info' if level == 0 else 'error'
-    lvl = 20 if level == 0 else 40
-
-    logger = logging.getLogger(lg)
-    logger.log(lvl, msg)
-
-
 class Onshape(object):
-    '''
-    Provides access to the Onshape REST API.
-
-    Attributes:
-        - stack (str): Base URL
-        - creds (str, default='./creds.json'): Credentials location
-        - logging (bool, default=True): Turn logging on or off
-    '''
-
-    def __init__(self, stack, creds, logging=True):
-        '''
+    def __init__(self, creds):
+        """
+        Provides access to the Onshape REST API.
         Instantiates an instance of the Onshape class. Reads credentials from a JSON file
         of this format:
 
             {
-                "http://cad.onshape.com": {
-                    "access_key": "YOUR KEY HERE",
-                    "secret_key": "YOUR KEY HERE"
-                },
-                etc... add new object for each stack to test on
+              "onshape_url": "https://cad.onshape.com",
+              "access_key": "your_access_key",
+              "secret_key": "your_secret_key"
             }
 
-        The creds.json file should be stored in the root project folder; optionally,
-        you can specify the location of a different file.
-
         Args:
-            - stack (str): Base URL
-            - creds (str, default='./creds.json'): Credentials location
-        '''
-
+            - creds: Credentials location
+        """
         if not os.path.isfile(creds):
-            raise IOError('%s is not a file' % creds)
+            raise IOError(f'{creds} is not a file')
 
         with open(creds) as f:
             try:
-                stacks = json.load(f)
-                if stack in stacks:
-                    self._url = stack
-                    self._access_key = stacks[stack]['access_key'].encode("utf-8")
-                    self._secret_key = stacks[stack]['secret_key'].encode("utf-8")
-                    self._logging = logging
-                else:
-                    raise ValueError('specified stack not in file')
+                stack = json.load(f)
+
+                self._url = stack['onshape_url']
+                self._access_key = stack['access_key'].encode("utf-8")
+                self._secret_key = stack['secret_key'].encode("utf-8")
+
             except TypeError:
                 raise ValueError('%s is not valid json' % creds)
 
-        if self._logging:
-            log('onshape instance created: url = %s, access key = %s' % (self._url, self._access_key))
+        print(f'onshape instance created: url = {self._url}, access key = {self._access_key}')
 
-    def _make_nonce(self):
-        '''
+    @staticmethod
+    def _make_nonce():
+        """
         Generate a unique ID for the request, 25 chars in length
 
         Returns:
             - str: Cryptographic nonce
-        '''
-
+        """
         chars = string.digits + string.ascii_letters
         nonce = ''.join(random.choice(chars) for i in range(25))
 
-        if self._logging:
-            log('nonce created: %s' % nonce)
+        print('nonce created: %s' % nonce)
 
         return nonce
 
     def _make_auth(self, method, date, nonce, path, query={}, ctype='application/json'):
-        '''
+        """
         Create the request signature to authenticate
 
         Args:
@@ -207,8 +123,7 @@ class Onshape(object):
             - path (str): URL pathname
             - query (dict, default={}): URL query string in key-value pairs
             - ctype (str, default='application/json'): HTTP Content-Type
-        '''
-
+        """
         query = urllib.parse.urlencode(query)
 
         hmac_str = (method + '\n' + nonce + '\n' + date + '\n' + ctype + '\n' + path +
@@ -217,18 +132,15 @@ class Onshape(object):
         signature = base64.b64encode(hmac.new(self._secret_key, hmac_str, digestmod=hashlib.sha256).digest())
         auth = 'On ' + self._access_key.decode('utf-8') + ':HmacSHA256:' + signature.decode('utf-8')
 
-        if self._logging:
-            log({
-                'query': query,
-                'hmac_str': hmac_str,
-                'signature': signature,
-                'auth': auth
-            })
+        print({'query': query,
+               'hmac_str': hmac_str,
+               'signature': signature,
+               'auth': auth})
 
         return auth
 
     def _make_headers(self, method, path, query={}, headers={}):
-        '''
+        """
         Creates a headers object to sign the request
 
         Args:
@@ -239,9 +151,8 @@ class Onshape(object):
 
         Returns:
             - dict: Dictionary containing all headers
-        '''
-
-        date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        """
+        date = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
         nonce = self._make_nonce()
         ctype = headers.get('Content-Type') if headers.get('Content-Type') else 'application/json'
 
@@ -263,7 +174,7 @@ class Onshape(object):
         return req_headers
 
     def request(self, method, path, query={}, headers={}, body={}, base_url=None):
-        '''
+        """
         Issues a request to Onshape
 
         Args:
@@ -276,17 +187,15 @@ class Onshape(object):
 
         Returns:
             - requests.Response: Object containing the response from Onshape
-        '''
-
+        """
         req_headers = self._make_headers(method, path, query, headers)
         if base_url is None:
             base_url = self._url
         url = base_url + path + '?' + urllib.parse.urlencode(query)
 
-        if self._logging:
-            log(body)
-            log(req_headers)
-            log('request url: ' + url)
+        # print('body:', body)
+        # print('req_headers:', req_headers)
+        # print('request url: ' + url)
 
         # only parse as json string if we have to
         body = json.dumps(body) if type(body) == dict else body
@@ -297,8 +206,7 @@ class Onshape(object):
             location = urllib.parse.urlparse(res.headers["Location"])
             querystring = urllib.parse.parse_qs(location.query)
 
-            if self._logging:
-                log('request redirected to: ' + location.geturl())
+            print('request redirected to: ' + location.geturl())
 
             new_query = {}
             new_base_url = location.scheme + '://' + location.netloc
@@ -307,18 +215,20 @@ class Onshape(object):
                 new_query[key] = querystring[key][0]  # won't work for repeated query params
 
             return self.request(method, location.path, query=new_query, headers=headers, base_url=new_base_url)
+
         elif not 200 <= res.status_code <= 206:
-            if self._logging:
-                log('request failed, details: ' + res.text, level=1)
+            # print('request failed, details: ' + res.text)
+            print('request failed')
+
         else:
-            if self._logging:
-                log('request succeeded, details: ' + res.text)
+            # print('request succeeded, details: ' + res.text)
+            print('request succeeded')
 
         return res
 
 
 class Client(object):
-    '''
+    """
     Defines methods for testing the Onshape API. Comes with several methods:
 
     - Create a document
@@ -328,22 +238,19 @@ class Client(object):
     Attributes:
         - stack (str, default='https://cad.onshape.com'): Base URL
         - logging (bool, default=True): Turn logging on or off
-    '''
-
-    def __init__(self, stack='https://cad.onshape.com', creds='./config/onshape_credit.json', logging=False):
-        '''
+    """
+    def __init__(self, creds='./config/onshape_credit.json'):
+        """
         Instantiates a new Onshape client.
 
         Args:
             - stack (str, default='https://cad.onshape.com'): Base URL
             - logging (bool, default=True): Turn logging on or off
-        '''
-
-        self._stack = stack
-        self._api = Onshape(stack=stack, creds=creds, logging=logging)
+        """
+        self._api = Onshape(creds=creds)
 
     def new_document(self, name='Test Document', owner_type=0, public=False):
-        '''
+        """
         Create a new document.
 
         Args:
@@ -353,8 +260,7 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         payload = {
             'name': name,
             'ownerType': owner_type,
@@ -364,7 +270,7 @@ class Client(object):
         return self._api.request('post', '/api/documents', body=payload)
 
     def rename_document(self, did, name):
-        '''
+        """
         Renames the specified document.
 
         Args:
@@ -373,8 +279,7 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         payload = {
             'name': name
         }
@@ -382,7 +287,7 @@ class Client(object):
         return self._api.request('post', '/api/documents/' + did, body=payload)
 
     def del_document(self, did):
-        '''
+        """
         Delete the specified document.
 
         Args:
@@ -390,8 +295,7 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         return self._api.request('delete', '/api/documents/' + did)
 
     def get_document(self, did):
@@ -437,7 +341,7 @@ class Client(object):
         return self._api.request('post', '/api/assemblies/d/' + did + '/w/' + wid, body=payload)
 
     def get_features(self, did, wid, eid):
-        '''
+        """
         Gets the feature list for specified document / workspace / part studio.
 
         Args:
@@ -447,8 +351,7 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         return self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/features')
 
     def get_partstudio_tessellatededges(self, did, wid, eid):
@@ -521,7 +424,8 @@ class Client(object):
 
 
 class MyClient(Client):
-    """inherited from OnShape public apikey python client,
+    """
+    inherited from OnShape public apikey python client,
     with additional method for parsing cad.
     """
     def get_tessellatedfaces(self, did, wid, eid):
@@ -539,7 +443,8 @@ class MyClient(Client):
         return self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/tessellatedfaces')
 
     def get_entity_by_id(self, did, wid, eid, geo_id, entity_type):
-        """get the parameters of geometry entity for specified entity id and type
+        """
+        get the parameters of geometry entity for specified entity id and type
 
         Args:
             - did (str): Document ID
@@ -572,7 +477,8 @@ class MyClient(Client):
         return res
 
     def eval_sketch_topology_by_adjacency(self, did, wid, eid, feat_id):
-        """parse the hierarchical parametric geometry&topology (face -> edges -> vertex)
+        """
+        parse the hierarchical parametric geometry&topology (face -> edges -> vertex)
         from a specified sketch feature ID.
 
         Args:
@@ -640,17 +546,21 @@ class MyClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
         res_msg = res.json()['result']['message']['value']
+
+        # with open(r'D:\document\DeepLearningIdea\multi_cmd_seq_gen\ofsfea.json', 'w') as f:
+        #     json.dump(res_msg, f, ensure_ascii=False, indent=4)
+
         topo = {}
         for item in res_msg:
             item_msg = item['message']
-            k_str = item_msg['key']['message']['value'].encode('utf-8')  # faces, edges
+            k_str = item_msg['key']['message']['value']  # faces, edges
             v_item = item_msg['value']['message']['value']
             outer_list = []
             for item_x in v_item:
                 v_item_x = item_x['message']['value']
                 geo_dict = {}
                 for item_y in v_item_x:
-                    k = item_y['message']['key']['message']['value'].encode('utf-8')  # id, edges/vertices
+                    k = item_y['message']['key']['message']['value']  # id, edges/vertices
                     v_msg = item_y['message']['value']
                     if k == 'param':
                         if k_str == 'faces':
@@ -662,12 +572,13 @@ class MyClient(Client):
                         else:
                             raise ValueError
                     elif isinstance(v_msg['message']['value'], list):
-                        v = [a['message']['value'].encode('utf-8') for a in v_msg['message']['value']]
+                        v = [a['message']['value'] for a in v_msg['message']['value']]
                     else:
-                        v = v_msg['message']['value'].encode('utf-8')
+                        v = v_msg['message']['value']
                     geo_dict.update({k: v})
                 outer_list.append(geo_dict)
             topo.update({k_str: outer_list})
+
         return topo
 
     @staticmethod
@@ -701,7 +612,9 @@ class MyClient(Client):
 
     @staticmethod
     def parse_edge_msg(response):
-        """parse edge parameters from OnShape response data"""
+        """
+        parse edge parameters from OnShape response data
+        """
         # data = response.json()['result']['message']['value']
         data = [response] if not isinstance(response, list) else response
         edges = []
@@ -727,7 +640,9 @@ class MyClient(Client):
 
     @staticmethod
     def parse_face_msg(response):
-        """parse face parameters from OnShape response data"""
+        """
+        parse face parameters from OnShape response data
+        """
         # data = response.json()['result']['message']['value']
         data = [response] if not isinstance(response, list) else response
         faces = []
@@ -752,7 +667,8 @@ class MyClient(Client):
         return faces
 
     def eval_entityID_created_by_feature(self, did, wid, eid, feat_id, entity_type):
-        """get IDs of all geometry entity created by a given feature, with specified type
+        """
+        get IDs of all geometry entity created by a given feature, with specified type
 
         Args:
             - did (str): Document ID
@@ -784,7 +700,9 @@ class MyClient(Client):
         return entityIDs
 
     def eval_bodydetails(self, did, wid, eid):
-        """parse the B-rep representation as a dict"""
+        """
+        parse the B-rep representation as a dict
+        """
         res = self._api.request('get', '/api/partstudios/d/{}/w/{}/e/{}/bodydetails'.format(did, wid, eid)).json()
         # extract local coordinate system for each face
         for body in res['bodies']:
@@ -804,7 +722,7 @@ class MyClient(Client):
         return res
 
     def eval_boundingBox(self, did, wid, eid):
-        '''
+        """
         Get bounding box of all solid bodies for specified document / workspace / part studio.
 
         Args:
@@ -814,7 +732,7 @@ class MyClient(Client):
 
         Returns:
             - dict: {'maxCorner': [], 'minCorner': []}
-        '''
+        """
         body = {
             "script":
                 "function(context is Context, queries) { " +
@@ -835,7 +753,9 @@ class MyClient(Client):
         return result
 
     def eval_curveLength(self, did, wid, eid, geo_id):
-        """get the length of a curve specified by its entity ID"""
+        """
+        get the length of a curve specified by its entity ID
+        """
         body = {
             "script":
                 "function(context is Context, queries) { " +
@@ -856,7 +776,9 @@ class MyClient(Client):
         return edge_len
 
     def eval_curve_midpoint(self, did, wid, eid, geo_id):
-        """get the midpoint of a curve specified by its entity ID"""
+        """
+        get the midpoint of a curve specified by its entity ID
+        """
         body = {
             "script":
                 "function(context is Context, queries) { " +
@@ -874,7 +796,9 @@ class MyClient(Client):
         return midpoint
 
     def expr2meter(self, did, wid, eid, expr):
-        """convert value expresson to meter unit"""
+        """
+        convert value expresson to meter unit
+        """
         body = {
             "script":
                 "function(context is Context, queries) { "
@@ -883,20 +807,21 @@ class MyClient(Client):
             "queries": []
         }
 
-        res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid +
-                             '/featurescript', body=body).json()
+        res = self._api.request('post',
+                                '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
+                                body=body).json()
         return res['result']['message']['value']
 
 
 class FeatureListParser(object):
-    """A parser for OnShape feature list (construction sequence)"""
-    def __init__(self, client, did, wid, eid):
+    def __init__(self, client, did, wid, eid, feature_list=None):
         """
-
+        A parser for OnShape feature list (construction sequence)
         :param client:
         :param did:
         :param wid:
         :param eid:
+        :param feature_list:
         """
         self.client = client
 
@@ -904,7 +829,12 @@ class FeatureListParser(object):
         self.wid = wid
         self.eid = eid
 
-        self.feature_list = self.client.get_features(did, wid, eid).json()
+        if feature_list is None:
+            print('get feature_list by onshape_api request')
+            self.feature_list = self.client.get_features(did, wid, eid).json()
+        else:
+            print('load feature_list')
+            self.feature_list = feature_list
 
         self.profile2sketch = {}
 
@@ -916,8 +846,8 @@ class FeatureListParser(object):
             param_id = param_msg['parameterId']
             if 'queries' in param_msg:
                 param_value = []
-                for i in range(len(param_msg['queries'])):
-                    param_value.extend(param_msg['queries'][i]['message']['geometryIds']) # FIXME: could be error-prone
+                for j in range(len(param_msg['queries'])):
+                    param_value.extend(param_msg['queries'][j]['message']['geometryIds'])
             elif 'expression' in param_msg:
                 param_value = param_msg['expression']
             elif 'value' in param_msg:
@@ -1015,14 +945,16 @@ class FeatureListParser(object):
         return result
 
     def parse(self):
-        """parse into fusion360 gallery format,
+        """
+        parse into fusion360 gallery format,
         only sketch and extrusion are supported.
         """
         result = {"entities": OrderedDict(), "properties": {}, "sequence": []}
+
         try:
             bbox = self._parse_boundingBox()
         except Exception as e:
-            print(self.data_id, "bounding box failed:", e)
+            print("bounding box failed:", e)
             return result
         result["properties"].update({"bounding_box": bbox})
 
@@ -1039,9 +971,9 @@ class FeatureListParser(object):
                 elif feat_type == 'extrude':
                     feat_dict = self._parse_extrude(feat_data)
                 else:
-                    raise NotImplementedError(self.data_id, "unsupported feature type: {}".format(feat_type))
+                    raise NotImplementedError("unsupported feature type: {}".format(feat_type))
             except Exception as e:
-                print(self.data_id, "parse feature failed:", e)
+                print("parse feature failed:", e)
                 break
             result["entities"].update({feat_Id: feat_dict})
             result["sequence"].append({"index": i, "type": feat_dict['type'], "entity": feat_Id})
@@ -1049,8 +981,10 @@ class FeatureListParser(object):
 
 
 class SketchParser(object):
-    """A parser for OnShape sketch feature list"""
-    def __init__(self, client, feat_data, did, wid, eid, data_id=None):
+    """
+    A parser for OnShape sketch feature list
+    """
+    def __init__(self, client, feat_data, did, wid, eid):
         self.client = client
         self.feat_id = feat_data['featureId']
         self.feat_name = feat_data['name']
@@ -1059,7 +993,6 @@ class SketchParser(object):
         self.did = did
         self.wid = wid
         self.eid = eid
-        self.data_id = data_id
 
         geo_id = self.feat_param["sketchPlane"][0]
         response = self.client.get_entity_by_id(did, wid, eid, [geo_id], "FACE")
@@ -1070,7 +1003,9 @@ class SketchParser(object):
         self._build_lookup()
 
     def _to_local_coordinates(self):
-        """transform into local coordinate system"""
+        """
+        transform into local coordinate system
+        """
         self.origin = np.array(self.plane["origin"])
         self.z_axis = np.array(self.plane["normal"])
         self.x_axis = np.array(self.plane["x"])
@@ -1091,7 +1026,9 @@ class SketchParser(object):
                                                           np.dot(new_vec, self.z_axis)]
 
     def _build_lookup(self):
-        """build a look up table with entity ID as key"""
+        """
+        build a look up table with entity ID as key
+        """
         edge_table = {}
         for item in self.geo_topo["edges"]:
             edge_table.update({item["id"]: item})
@@ -1103,8 +1040,10 @@ class SketchParser(object):
         self.vert_table = vert_table
 
     def _parse_edges_to_loops(self, all_edge_ids):
-        """sort all edges of a face into loops."""
-        # FIXME: this can be error-prone. bug situation: one vertex connected to 3 edges
+        """
+        sort all edges of a face into loops.
+        FIXME: this can be error-prone. bug situation: one vertex connected to 3 edges
+        """
         vert2edge = {}
         for edge_id in all_edge_ids:
             item = self.edge_table[edge_id]
@@ -1141,7 +1080,9 @@ class SketchParser(object):
         return all_loops
 
     def _parse_edge_to_fusion360_format(self, edge_id):
-        """parse a edge into fusion360 gallery format. Only support 'Line', 'Circle' and 'Arc'."""
+        """
+        parse a edge into fusion360 gallery format. Only support 'Line', 'Circle' and 'Arc'.
+        """
         edge_data = self.edge_table[edge_id]
         edge_type = edge_data["param"]["type"]
         if edge_type == "Line":
@@ -1198,6 +1139,7 @@ class SketchParser(object):
                           "center_point": center_point, "radius": radius, "normal": normal,
                           "start_angle": 0.0, "end_angle": sweep_angle, "reference_vector": ref_vec_dict,
                           "curve": edge_id})
+
         elif edge_type == "Circle" and len(edge_data["vertices"]) < 2:
             # NOTE: treat the circle with only one connected vertex as a full circle
             radius = edge_data["param"]["radius"]
@@ -1210,7 +1152,9 @@ class SketchParser(object):
         return curve_dict
 
     def parse_to_fusion360_format(self):
-        """parse sketch feature into fusion360 gallery format"""
+        """
+        parse sketch feature into fusion360 gallery format
+        """
         name = self.feat_name
 
         # transform & reference plane
@@ -1239,7 +1183,7 @@ class SketchParser(object):
         return entity_dict
 
 
-def process_one(data_id, link, save_path, is_load_ofs=True):
+def process_one(link, is_load_ofs):
     """
     data_id: model number
     link: model link on onShape
@@ -1253,41 +1197,40 @@ def process_one(data_id, link, save_path, is_load_ofs=True):
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
     # filter data that use operations other than sketch + extrude
+    ofs_json_file = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
+    if is_load_ofs:
+        with open(ofs_json_file, 'r') as f:
+            ofs_data = json.load(f)
+    else:
+        ofs_data = onshape_client.get_features(did, wid, eid).json()
+        try:
+            with open(ofs_json_file, 'w') as f:
+                json.dump(ofs_data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(e)
+            exit(0)
+
+    # 如果存在除了拉伸之外的命令，直接跳过
+    for item in ofs_data['features']:
+        if item['message']['featureType'] not in ['newSketch', 'extrude']:
+            return 0
+
+    # except Exception as e:
+    #     print(f'contain unsupported features: {e}')
+    #     return 0
+
     try:
-        ofs_json_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
-        if is_load_ofs:
-            ofs_data = onshape_client.get_features(did, wid, eid).json()
-
-            try:
-                with open(ofs_json_file, 'w') as f:
-                    json.dump(ofs_data, f, ensure_ascii=False, indent=4)
-            except Exception as e:
-                print(e)
-                exit(0)
-
-        else:
-            with open(ofs_json_file, 'r') as f:
-                ofs_data = json.load(f)
-
-        for item in ofs_data['features']:
-            if item['message']['featureType'] not in ['newSketch', 'extrude']:
-                return 0
-    except Exception as e:
-        print("[{}], contain unsupported features:".format(data_id), e)
-        return 0
-
-    # parse detailed cad operations
-    try:
-        parser = FeatureListParser(onshape_client, did, wid, eid, data_id=data_id)
+        parser = FeatureListParser(onshape_client, did, wid, eid, ofs_data)
         result = parser.parse()
+
     except Exception as e:
-        print("[{}], feature parsing fails:".format(data_id), e)
+        print(f'feature parsing fails: {e}')
         return 0
+
     if len(result["sequence"]) < 2:
         return 0
-    with open(save_path, 'w') as fp:
-        json.dump(result, fp, indent=1)
-    return len(result["sequence"])
+
+    return result
 
 
 def process_batch(source_dir, target_dir):
@@ -1333,7 +1276,7 @@ def test():
         print(data_id)
 
         try:
-            process_one(data_id, link, fr'E:\document\DeeplearningIdea\multi_cmd_seq_gen\gen_ofs_{data_id}.json')
+            process_one(link, True)
         except Exception as e:
             print(f'exception: {e}')
 
