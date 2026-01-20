@@ -95,10 +95,40 @@ class Onshape(object):
                 self._access_key = stack['access_key'].encode("utf-8")
                 self._secret_key = stack['secret_key'].encode("utf-8")
 
-            except TypeError:
-                raise ValueError('%s is not valid json' % creds)
+            except Exception as e:
+                self.save_creds(creds)
+                exit(f'please restart app, Exception: {e}')
 
         print(f'onshape instance created: url = {self._url}, access key = {self._access_key}')
+
+    @staticmethod
+    def save_creds(json_path):
+        """
+        Ask user to input Onshape credentials and save them as a JSON file.
+
+        Parameters
+        ----------
+        json_path : str
+            Full path to the output json file, e.g. "config/onshape_auth.json"
+        """
+
+        onshape_url = input("Enter Onshape URL (e.g. https://cad.onshape.com): ").strip()
+        access_key = input("Enter Onshape access_key: ").strip()
+        secret_key = input("Enter Onshape secret_key: ").strip()
+
+        config = {
+            "onshape_url": onshape_url,
+            "access_key": access_key,
+            "secret_key": secret_key
+        }
+
+        # Ensure parent directory exists
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4)
+
+        print(f"Onshape credits saved to: {json_path}")
 
     @staticmethod
     def _make_nonce():
