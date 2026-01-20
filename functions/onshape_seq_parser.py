@@ -27,11 +27,14 @@ from datetime import datetime, timezone
 import urllib
 import hmac
 import requests
-from msgpack import dump
 
-EXTENT_TYPE_MAP = {'BLIND': 'OneSideFeatureExtentType', 'SYMMETRIC': 'SymmetricFeatureExtentType'}
-OPERATION_MAP = {'NEW': 'NewBodyFeatureOperation', 'ADD': 'JoinFeatureOperation',
-                 'REMOVE': 'CutFeatureOperation', 'INTERSECT': 'IntersectFeatureOperation'}
+EXTENT_TYPE_MAP = {'BLIND': 'OneSideFeatureExtentType',
+                   'SYMMETRIC': 'SymmetricFeatureExtentType'}
+
+OPERATION_MAP = {'NEW': 'NewBodyFeatureOperation',
+                 'ADD': 'JoinFeatureOperation',
+                 'REMOVE': 'CutFeatureOperation',
+                 'INTERSECT': 'IntersectFeatureOperation'}
 
 
 def xyz_list2dict(xyz):
@@ -127,9 +130,9 @@ class Onshape(object):
         query = urllib.parse.urlencode(query)
 
         hmac_str = (method + '\n' + nonce + '\n' + date + '\n' + ctype + '\n' + path +
-                    '\n' + query + '\n').lower().encode('utf-8')
+                    '\n' + query + '\n').lower()
 
-        signature = base64.b64encode(hmac.new(self._secret_key, hmac_str, digestmod=hashlib.sha256).digest())
+        signature = base64.b64encode(hmac.new(self._secret_key, hmac_str.encode('utf-8'), digestmod=hashlib.sha256).digest())
         auth = 'On ' + self._access_key.decode('utf-8') + ':HmacSHA256:' + signature.decode('utf-8')
 
         print({'query': query,
@@ -193,12 +196,8 @@ class Onshape(object):
             base_url = self._url
         url = base_url + path + '?' + urllib.parse.urlencode(query)
 
-        # print('body:', body)
-        # print('req_headers:', req_headers)
-        # print('request url: ' + url)
-
         # only parse as json string if we have to
-        body = json.dumps(body) if type(body) == dict else body
+        body = json.dumps(body) if isinstance(body, dict) else body
 
         res = requests.request(method, url, headers=req_headers, data=body, allow_redirects=False, stream=True)
 
@@ -547,14 +546,15 @@ class MyClient(Client):
 
         res_msg = res.json()['result']['message']['value']
 
-        # with open(r'D:\document\DeepLearningIdea\multi_cmd_seq_gen\ofsfea.json', 'w') as f:
+        # with open(r'E:\document\DeepLearningIdea\multi_cmd_seq_gen\sketch_topo.json', 'w') as f:
         #     json.dump(res_msg, f, ensure_ascii=False, indent=4)
+        # exit('qeeeeeeeeeeeeeeeeeeee')
 
         topo = {}
         for item in res_msg:
-            item_msg = item['message']
-            k_str = item_msg['key']['message']['value']  # faces, edges
-            v_item = item_msg['value']['message']['value']
+            # item_msg = item['message']
+            k_str = item['message']['key']['message']['value']  # faces, edges
+            v_item = item['message']['value']['message']['value']
             outer_list = []
             for item_x in v_item:
                 v_item_x = item_x['message']['value']
@@ -589,12 +589,12 @@ class MyClient(Client):
         vertices = []
         for item in data:
             xyz_msg = item['message']['value']
-            xyz_type = item['message']['typeTag'].encode('utf-8')
+            xyz_type = item['message']['typeTag']
             p = []
             for msg in xyz_msg:
                 p.append(round(msg['message']['value'], 8))
             unit = xyz_msg[0]['message']['unitToPower'][0]
-            unit_exp = (unit['key'].encode('utf-8'), unit['value'])
+            unit_exp = (unit['key'], unit['value'])
             vertices.append({xyz_type: tuple(p), 'unit': unit_exp})
         return vertices
 
@@ -604,7 +604,7 @@ class MyClient(Client):
         coord_param = {}
         for item in response:
             k_msg = item['message']['key']
-            k = k_msg['message']['value'].encode('utf-8')
+            k = k_msg['message']['value']
             v_msg = item['message']['value']
             v = [round(x['message']['value'], 8) for x in v_msg['message']['value']]
             coord_param.update({k: v})
@@ -617,23 +617,38 @@ class MyClient(Client):
         """
         # data = response.json()['result']['message']['value']
         data = [response] if not isinstance(response, list) else response
+
+        # with open(r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\edgeinfo.json', 'w') as f:
+        #     json.dump(data, f, ensure_ascii=False, indent=4)
+        # exit('--------------')
+
         edges = []
         for item in data:
             edge_msg = item['message']['value']
-            edge_type = item['message']['typeTag'].encode('utf-8')
+            edge_type = item['message']['typeTag']
             edge_param = {'type': edge_type}
             for msg in edge_msg:
-                k = msg['message']['key']['message']['value'].encode('utf-8')
+                k = msg['message']['key']['message']['value']
                 v_item = msg['message']['value']['message']['value']
                 if k == 'coordSystem':
                     v = MyClient.parse_coord_msg(v_item)
                 elif isinstance(v_item, list):
-                    v = [round(x['message']['value'], 8) for x in v_item]
+
+                    try:
+                        v = [round(x['message']['value'], 8) for x in v_item]
+                    except:
+                        all_vals = [x['message']['value'] for x in v_item]
+
+                        with open(r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs2.json', 'w') as f:
+                            json.dump(v_item, f, ensure_ascii=False, indent=4)
+                        exit(f'-------{k}---------')
+
+
                 else:
                     if isinstance(v_item, float):
                         v = round(v_item, 8)
                     else:
-                        v = v_item.encode('utf-8')
+                        v = v_item
                 edge_param.update({k: v})
             edges.append(edge_param)
         return edges
@@ -648,10 +663,10 @@ class MyClient(Client):
         faces = []
         for item in data:
             face_msg = item['message']['value']
-            face_type = item['message']['typeTag'].encode('utf-8')
+            face_type = item['message']['typeTag']
             face_param = {'type': face_type}
             for msg in face_msg:
-                k = msg['message']['key']['message']['value'].encode('utf-8')
+                k = msg['message']['key']['message']['value']
                 v_item = msg['message']['value']['message']['value']
                 if k == 'coordSystem':
                     v = MyClient.parse_coord_msg(v_item)
@@ -661,7 +676,7 @@ class MyClient(Client):
                     if isinstance(v_item, float):
                         v = round(v_item, 8)
                     else:
-                        v = v_item.encode('utf-8')
+                        v = v_item
                 face_param.update({k: v})
             faces.append(face_param)
         return faces
@@ -963,18 +978,18 @@ class FeatureListParser(object):
             feat_type = feat_data['featureType']
             feat_Id = feat_data['featureId']
 
-            try:
-                if feat_type == 'newSketch':
-                    feat_dict = self._parse_sketch(feat_data)
-                    for k in feat_dict['profiles'].keys():
-                        self.profile2sketch.update({k: feat_Id})
-                elif feat_type == 'extrude':
-                    feat_dict = self._parse_extrude(feat_data)
-                else:
-                    raise NotImplementedError("unsupported feature type: {}".format(feat_type))
-            except Exception as e:
-                print("parse feature failed:", e)
-                break
+            # try:
+            if feat_type == 'newSketch':
+                feat_dict = self._parse_sketch(feat_data)
+                for k in feat_dict['profiles'].keys():
+                    self.profile2sketch.update({k: feat_Id})
+            elif feat_type == 'extrude':
+                feat_dict = self._parse_extrude(feat_data)
+            else:
+                raise NotImplementedError("unsupported feature type: {}".format(feat_type))
+            # except Exception as e:
+            #     print("parse feature failed:", e)
+            #     break
             result["entities"].update({feat_Id: feat_dict})
             result["sequence"].append({"index": i, "type": feat_dict['type'], "entity": feat_Id})
         return result
@@ -999,6 +1014,11 @@ class SketchParser(object):
         self.plane = self.client.parse_face_msg(response.json()['result']['message']['value'])[0]
 
         self.geo_topo = self.client.eval_sketch_topology_by_adjacency(did, wid, eid, self.feat_id)
+
+        # with open(r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs2.json', 'w') as f:
+        #     json.dump(self.geo_topo, f, ensure_ascii=False, indent=4)
+        # exit('---------qqwqwqwq-------')
+
         self._to_local_coordinates()
         self._build_lookup()
 
@@ -1197,7 +1217,7 @@ def process_one(link, is_load_ofs):
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
     # filter data that use operations other than sketch + extrude
-    ofs_json_file = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
+    ofs_json_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
     if is_load_ofs:
         with open(ofs_json_file, 'r') as f:
             ofs_data = json.load(f)
@@ -1215,17 +1235,13 @@ def process_one(link, is_load_ofs):
         if item['message']['featureType'] not in ['newSketch', 'extrude']:
             return 0
 
+    # try:
+    parser = FeatureListParser(onshape_client, did, wid, eid, ofs_data)
+    result = parser.parse()
+
     # except Exception as e:
-    #     print(f'contain unsupported features: {e}')
+    #     print(f'feature parsing fails: {e}')
     #     return 0
-
-    try:
-        parser = FeatureListParser(onshape_client, did, wid, eid, ofs_data)
-        result = parser.parse()
-
-    except Exception as e:
-        print(f'feature parsing fails: {e}')
-        return 0
 
     if len(result["sequence"]) < 2:
         return 0
@@ -1270,15 +1286,17 @@ def test():
         '00000352': 'https://cad.onshape.com/documents/4185972a944744d8a7a0f2b4/w/d82d7eef8edf4342b7e49732/e/b6d6b562e8b64e7ea50d8325',
         # '00001272': 'https://cad.onshape.com/documents/b53ece83d8964b44bbf1f8ed/w/6b2f1aad3c43402c82009c85/e/91cb13b68f164c2eba845ce6',
         # '00001616': 'https://cad.onshape.com/documents/8c3b97c1382c43bab3eb1b48/w/43439c4e192347ecbf818421/e/63b575e3ac654545b571eee6',
+        # '00000351345632': 'https://cad.onshape.com/documents/26184933976172ce6c3c2f4f/w/cc130d2a3aa0f3c24518a07a/e/ab569ae0a7bd1248ace5a14a',
     }
 
     for data_id, link in data_examples.items():
         print(data_id)
 
-        try:
-            process_one(link, True)
-        except Exception as e:
-            print(f'exception: {e}')
+        # try:
+        process_one(link, False)
+        print('all success')
+        # except Exception as e:
+        #     print(f'exception: {e}')
 
 
 

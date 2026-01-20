@@ -691,7 +691,6 @@ def set_axes_equal(ax):
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
-
 if __name__ == '__main__':
     # img_proc.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig', (255, 255, 255), 4)
     # vis.vis_cls_log(r'C:\Users\ChengXi\Desktop\cstnet2\pnet2_geomloss.txt')
@@ -733,7 +732,8 @@ if __name__ == '__main__':
 
     # vis_cst_pcd()
     # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
-    vis_pcd_gen()
+    # vis_pcd_gen()
+    test_deepcad_onshape_parser()
 
     pass
 
