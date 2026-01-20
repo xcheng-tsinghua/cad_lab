@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 import urllib
 import hmac
 import requests
+import sys
+
 
 EXTENT_TYPE_MAP = {'BLIND': 'OneSideFeatureExtentType',
                    'SYMMETRIC': 'SymmetricFeatureExtentType'}
@@ -90,14 +92,13 @@ class Onshape(object):
         with open(creds) as f:
             try:
                 stack = json.load(f)
-
                 self._url = stack['onshape_url']
                 self._access_key = stack['access_key'].encode("utf-8")
                 self._secret_key = stack['secret_key'].encode("utf-8")
 
             except Exception as e:
                 self.save_creds(creds)
-                exit(f'please restart app, Exception: {e}')
+                exit(f'Please restart the app. Exception: {e}')
 
         print(f'onshape instance created: url = {self._url}, access key = {self._access_key}')
 
@@ -125,10 +126,10 @@ class Onshape(object):
         # Ensure parent directory exists
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
 
-        with open(json_path, "w", encoding="utf-8") as f:
+        with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
 
-        print(f"Onshape credits saved to: {json_path}")
+        print(f'Onshape credits saved to: {json_path}')
 
     @staticmethod
     def _make_nonce():
@@ -139,9 +140,9 @@ class Onshape(object):
             - str: Cryptographic nonce
         """
         chars = string.digits + string.ascii_letters
-        nonce = ''.join(random.choice(chars) for i in range(25))
+        nonce = ''.join(random.choice(chars) for _ in range(25))
 
-        print('nonce created: %s' % nonce)
+        # print('nonce created: %s' % nonce)
 
         return nonce
 
@@ -165,10 +166,10 @@ class Onshape(object):
         signature = base64.b64encode(hmac.new(self._secret_key, hmac_str.encode('utf-8'), digestmod=hashlib.sha256).digest())
         auth = 'On ' + self._access_key.decode('utf-8') + ':HmacSHA256:' + signature.decode('utf-8')
 
-        print({'query': query,
-               'hmac_str': hmac_str,
-               'signature': signature,
-               'auth': auth})
+        # print({'query': query,
+        #        'hmac_str': hmac_str,
+        #        'signature': signature,
+        #        'auth': auth})
 
         return auth
 
@@ -221,6 +222,8 @@ class Onshape(object):
         Returns:
             - requests.Response: Object containing the response from Onshape
         """
+        # time.sleep(1.0)  # 防止因请求过快导致请求失败
+
         req_headers = self._make_headers(method, path, query, headers)
         if base_url is None:
             base_url = self._url
@@ -246,12 +249,12 @@ class Onshape(object):
             return self.request(method, location.path, query=new_query, headers=headers, base_url=new_base_url)
 
         elif not 200 <= res.status_code <= 206:
-            # print('request failed, details: ' + res.text)
-            print('request failed')
+            print('request failed, details: ' + res.text)
+            # print('request failed')
 
         else:
             # print('request succeeded, details: ' + res.text)
-            print('request succeeded')
+            print(f'request succeeded, status code: {res.status_code}')
 
         return res
 
@@ -328,7 +331,7 @@ class Client(object):
         return self._api.request('delete', '/api/documents/' + did)
 
     def get_document(self, did):
-        '''
+        """
         Get details for a specified document.
 
         Args:
@@ -336,22 +339,20 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         return self._api.request('get', '/api/documents/' + did)
 
     def list_documents(self):
-        '''
+        """
         Get list of documents for current user.
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         return self._api.request('get', '/api/documents')
 
     def create_assembly(self, did, wid, name='My Assembly'):
-        '''
+        """
         Creates a new assembly element in the specified document / workspace.
 
         Args:
@@ -361,8 +362,7 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         payload = {
             'name': name
         }
@@ -384,7 +384,7 @@ class Client(object):
         return self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/features')
 
     def get_partstudio_tessellatededges(self, did, wid, eid):
-        '''
+        """
         Gets the tessellation of the edges of all parts in a part studio.
 
         Args:
@@ -394,12 +394,11 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         return self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/tessellatededges')
 
     def upload_blob(self, did, wid, filepath='./blob.json'):
-        '''
+        """
         Uploads a file to a new blob element in the specified doc.
 
         Args:
@@ -409,10 +408,9 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         chars = string.ascii_letters + string.digits
-        boundary_key = ''.join(random.choice(chars) for i in range(8))
+        boundary_key = ''.join(random.choice(chars) for _ in range(8))
 
         mimetype = mimetypes.guess_type(filepath)[0]
         encoded_filename = os.path.basename(filepath)
@@ -434,7 +432,7 @@ class Client(object):
         return self._api.request('post', '/api/blobelements/d/' + did + '/w/' + wid, headers=req_headers, body=payload)
 
     def part_studio_stl(self, did, wid, eid):
-        '''
+        """
         Exports STL export from a part studio
 
         Args:
@@ -444,8 +442,7 @@ class Client(object):
 
         Returns:
             - requests.Response: Onshape response data
-        '''
-
+        """
         req_headers = {
             'Accept': 'application/vnd.onshape.v1+octet-stream'
         }
@@ -502,7 +499,6 @@ class MyClient(Client):
             "queries": [{ "key" : "id", "value" : geo_id }]
         }
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
-
         return res
 
     def eval_sketch_topology_by_adjacency(self, did, wid, eid, feat_id):
@@ -573,7 +569,6 @@ class MyClient(Client):
             "queries": []
         }
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
-
         res_msg = res.json()['result']['message']['value']
 
         # with open(r'E:\document\DeepLearningIdea\multi_cmd_seq_gen\sketch_topo.json', 'w') as f:
@@ -582,33 +577,40 @@ class MyClient(Client):
 
         topo = {}
         for item in res_msg:
-            # item_msg = item['message']
             k_str = item['message']['key']['message']['value']  # faces, edges
             v_item = item['message']['value']['message']['value']
             outer_list = []
+
             for item_x in v_item:
                 v_item_x = item_x['message']['value']
                 geo_dict = {}
+
                 for item_y in v_item_x:
                     k = item_y['message']['key']['message']['value']  # id, edges/vertices
                     v_msg = item_y['message']['value']
+
                     if k == 'param':
                         if k_str == 'faces':
                             v = MyClient.parse_face_msg(v_msg)[0]
+
                         elif k_str == 'edges':
                             v = MyClient.parse_edge_msg(v_msg)[0]
+
                         elif k_str == 'vertices':
                             v = MyClient.parse_vertex_msg(v_msg)[0]
+
                         else:
                             raise ValueError
+
                     elif isinstance(v_msg['message']['value'], list):
                         v = [a['message']['value'] for a in v_msg['message']['value']]
+
                     else:
                         v = v_msg['message']['value']
+
                     geo_dict.update({k: v})
                 outer_list.append(geo_dict)
             topo.update({k_str: outer_list})
-
         return topo
 
     @staticmethod
@@ -617,15 +619,19 @@ class MyClient(Client):
         # data = response.json()['result']['message']['value']
         data = [response] if not isinstance(response, list) else response
         vertices = []
+
         for item in data:
             xyz_msg = item['message']['value']
             xyz_type = item['message']['typeTag']
             p = []
+
             for msg in xyz_msg:
                 p.append(round(msg['message']['value'], 8))
+
             unit = xyz_msg[0]['message']['unitToPower'][0]
             unit_exp = (unit['key'], unit['value'])
             vertices.append({xyz_type: tuple(p), 'unit': unit_exp})
+
         return vertices
 
     @staticmethod
@@ -635,9 +641,11 @@ class MyClient(Client):
         for item in response:
             k_msg = item['message']['key']
             k = k_msg['message']['value']
+
             v_msg = item['message']['value']
             v = [round(x['message']['value'], 8) for x in v_msg['message']['value']]
-            coord_param.update({k: v})
+
+            coord_param[k] = v
         return coord_param
 
     @staticmethod
@@ -673,7 +681,6 @@ class MyClient(Client):
                             json.dump(v_item, f, ensure_ascii=False, indent=4)
                         exit(f'-------{k}---------')
 
-
                 else:
                     if isinstance(v_item, float):
                         v = round(v_item, 8)
@@ -691,23 +698,29 @@ class MyClient(Client):
         # data = response.json()['result']['message']['value']
         data = [response] if not isinstance(response, list) else response
         faces = []
+
         for item in data:
             face_msg = item['message']['value']
             face_type = item['message']['typeTag']
             face_param = {'type': face_type}
+
             for msg in face_msg:
                 k = msg['message']['key']['message']['value']
                 v_item = msg['message']['value']['message']['value']
                 if k == 'coordSystem':
                     v = MyClient.parse_coord_msg(v_item)
+
                 elif isinstance(v_item, list):
                     v = [round(x['message']['value'], 8) for x in v_item]
+
                 else:
                     if isinstance(v_item, float):
                         v = round(v_item, 8)
+
                     else:
                         v = v_item
-                face_param.update({k: v})
+
+                face_param[k] = v
             faces.append(face_param)
         return faces
 
@@ -766,7 +779,7 @@ class MyClient(Client):
                 face['surface'].update({'x_axis': x_axis})
         return res
 
-    def eval_boundingBox(self, did, wid, eid):
+    def eval_bounding_box(self, did, wid, eid):
         """
         Get bounding box of all solid bodies for specified document / workspace / part studio.
 
@@ -788,13 +801,16 @@ class MyClient(Client):
             "queries": []
         }
         response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
+
         bbox_values = response.json()['result']['message']['value']
         result = {}
         for item in bbox_values:
             k = item['message']['key']['message']['value']
             point_values = item['message']['value']['message']['value']
+
             v = [x['message']['value'] for x in point_values]
-            result.update({k: v})
+            result[k] = v
+
         return result
 
     def eval_curveLength(self, did, wid, eid, geo_id):
@@ -815,8 +831,7 @@ class MyClient(Client):
             "queries": [{"key": "id", "value": [geo_id]}]
         }
         # res = c.get_entity_by_id(did, wid, eid, 'JGV', 'EDGE')
-        response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
-                             body=body)
+        response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         edge_len = response.json()['result']['message']['value'][0]['message']['value']
         return edge_len
 
@@ -834,8 +849,7 @@ class MyClient(Client):
             "queries": [{"key": "id", "value": [geo_id]}]
         }
         # res = c.get_entity_by_id(did, wid, eid, 'JGV', 'EDGE')
-        response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
-                             body=body)
+        response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         point_info = response.json()['result']['message']['value']
         midpoint = [x['message']['value'] for x in point_info]
         return midpoint
@@ -844,6 +858,10 @@ class MyClient(Client):
         """
         convert value expresson to meter unit
         """
+        float_val = float(expr.split(' ')[0])
+        print(f'{expr} trans to {float_val}')
+        return float_val
+
         body = {
             "script":
                 "function(context is Context, queries) { "
@@ -852,9 +870,7 @@ class MyClient(Client):
             "queries": []
         }
 
-        res = self._api.request('post',
-                                '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
-                                body=body).json()
+        res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body).json()
         return res['result']['message']['value']
 
 
@@ -889,18 +905,22 @@ class FeatureListParser(object):
         for i, param_item in enumerate(feat_param_data):
             param_msg = param_item['message']
             param_id = param_msg['parameterId']
+
             if 'queries' in param_msg:
                 param_value = []
                 for j in range(len(param_msg['queries'])):
                     param_value.extend(param_msg['queries'][j]['message']['geometryIds'])
+
             elif 'expression' in param_msg:
                 param_value = param_msg['expression']
+
             elif 'value' in param_msg:
                 param_value = param_msg['value']
+
             else:
                 raise NotImplementedError('param_msg:\n{}'.format(param_msg))
 
-            param_dict.update({param_id: param_value})
+            param_dict[param_id] = param_value
         return param_dict
 
     def _parse_sketch(self, feature_data):
@@ -911,25 +931,33 @@ class FeatureListParser(object):
     def _expr2meter(self, expr):
         return self.client.expr2meter(self.did, self.wid, self.eid, expr)
 
-    def _locateSketchProfile(self, geo_ids):
+    def _locate_sketch_profile(self, geo_ids):
         return [{"profile": k, "sketch": self.profile2sketch[k]} for k in geo_ids]
 
     def _parse_extrude(self, feature_data):
+        """
+        解析拉伸参数
+        :param feature_data:
+        :return:
+        """
         param_dict = self.parse_feature_param(feature_data['parameters'])
         if 'hasOffset' in param_dict and param_dict['hasOffset'] is True:
             raise NotImplementedError("extrude with offset not supported: {}".format(param_dict['hasOffset']))
 
-        entities = param_dict['entities'] # geometryIds for target face
-        profiles = self._locateSketchProfile(entities)
+        entities = param_dict['entities']  # geometryIds for target face
+        profiles = self._locate_sketch_profile(entities)
 
         extent_one = self._expr2meter(param_dict['depth'])
         if param_dict['endBound'] == 'SYMMETRIC':
             extent_one = extent_one / 2
+
         if 'oppositeDirection' in param_dict and param_dict['oppositeDirection'] is True:
             extent_one = -extent_one
+
         extent_two = 0.0
         if param_dict['endBound'] not in ['BLIND', 'SYMMETRIC']:
             raise NotImplementedError("endBound type not supported: {}".format(param_dict['endBound']))
+
         elif 'hasSecondDirection' in param_dict and param_dict['hasSecondDirection'] is True:
             if param_dict['secondDirectionBound'] != 'BLIND':
                 raise NotImplementedError("secondDirectionBound type not supported: {}".format(param_dict['endBound']))
@@ -938,6 +966,7 @@ class FeatureListParser(object):
             if 'secondDirectionOppositeDirection' in param_dict \
                 and str(param_dict['secondDirectionOppositeDirection']) == 'true':
                 extent_two = -extent_two
+
         else:
             extent_type = EXTENT_TYPE_MAP[param_dict['endBound']]
 
@@ -982,8 +1011,35 @@ class FeatureListParser(object):
                     }
         return save_dict
 
-    def _parse_boundingBox(self):
-        bbox_info = self.client.eval_boundingBox(self.did, self.wid, self.eid)
+    def _parse_revolve(self, feature_data):
+        """
+        解析旋转参数
+        :param feature_data:
+        :return:
+        """
+        save_dict = {}
+        return save_dict
+
+    def _parse_loft(self, feature_data):
+        """
+        解析旋转参数
+        :param feature_data:
+        :return:
+        """
+        save_dict = {}
+        return save_dict
+
+    def _parse_sweep(self, feature_data):
+        """
+        解析旋转参数
+        :param feature_data:
+        :return:
+        """
+        save_dict = {}
+        return save_dict
+
+    def _parse_bounding_box(self):
+        bbox_info = self.client.eval_bounding_box(self.did, self.wid, self.eid)
         result = {"type": "BoundingBox3D",
                   "max_point": xyz_list2dict(bbox_info['maxCorner']),
                   "min_point": xyz_list2dict(bbox_info['minCorner'])}
@@ -996,32 +1052,44 @@ class FeatureListParser(object):
         """
         result = {"entities": OrderedDict(), "properties": {}, "sequence": []}
 
-        try:
-            bbox = self._parse_boundingBox()
-        except Exception as e:
-            print("bounding box failed:", e)
-            return result
-        result["properties"].update({"bounding_box": bbox})
+        # bbox = self._parse_bounding_box()
+        # result["properties"].update({"bounding_box": bbox})
 
         for i, feat_item in enumerate(self.feature_list['features']):
             feat_data = feat_item['message']
             feat_type = feat_data['featureType']
-            feat_Id = feat_data['featureId']
+            feat_id = feat_data['featureId']
 
-            # try:
             if feat_type == 'newSketch':
                 feat_dict = self._parse_sketch(feat_data)
-                for k in feat_dict['profiles'].keys():
-                    self.profile2sketch.update({k: feat_Id})
+                for pf_key in feat_dict['profiles'].keys():
+                    self.profile2sketch[pf_key] = feat_id
+
             elif feat_type == 'extrude':
                 feat_dict = self._parse_extrude(feat_data)
+
+            elif feat_type == 'revolve':  # 旋转
+                feat_dict = self._parse_revolve(feat_data)
+
+            elif feat_type == 'loft':  # 放样
+                feat_dict = self._parse_loft(feat_data)
+
+            elif feat_type == 'sweep':  # 扫描
+                feat_dict = self._parse_sweep(feat_data)
+
+            elif feat_type == '线性阵列、圆周阵列？':
+                feat_dict = self._parse_sweep(feat_data)
+
             else:
                 raise NotImplementedError("unsupported feature type: {}".format(feat_type))
-            # except Exception as e:
-            #     print("parse feature failed:", e)
-            #     break
-            result["entities"].update({feat_Id: feat_dict})
-            result["sequence"].append({"index": i, "type": feat_dict['type'], "entity": feat_Id})
+
+            result["entities"][feat_id] = feat_dict
+            result["sequence"].append({"index": i, "type": feat_dict['type'], "entity": feat_id})
+
+        # with open(r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\all_sketches.json', 'w') as f:
+        #     json.dump(feat_dict, f, ensure_ascii=False, indent=4)
+        # exit('---------sketch info save finished-------')
+
         return result
 
 
@@ -1041,6 +1109,10 @@ class SketchParser(object):
 
         geo_id = self.feat_param["sketchPlane"][0]
         response = self.client.get_entity_by_id(did, wid, eid, [geo_id], "FACE")
+
+        # with open(rf'E:\document\DeeplearningIdea\multi_cmd_seq_gen\face_resp_{sys._getframe(0).f_lineno}.json', 'w') as f:
+        #     json.dump(response.json(), f, ensure_ascii=False, indent=4)
+
         self.plane = self.client.parse_face_msg(response.json()['result']['message']['value'])[0]
 
         self.geo_topo = self.client.eval_sketch_topology_by_adjacency(did, wid, eid, self.feat_id)
@@ -1247,31 +1319,29 @@ def process_one(link, is_load_ofs):
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
     # filter data that use operations other than sketch + extrude
-    ofs_json_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs.json'
+    ofs_json_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs_orig.json'
     if is_load_ofs:
         with open(ofs_json_file, 'r') as f:
             ofs_data = json.load(f)
+
     else:
         ofs_data = onshape_client.get_features(did, wid, eid).json()
         try:
             with open(ofs_json_file, 'w') as f:
                 json.dump(ofs_data, f, ensure_ascii=False, indent=4)
+
         except Exception as e:
             print(e)
             exit(0)
 
     # 如果存在除了拉伸之外的命令，直接跳过
-    for item in ofs_data['features']:
-        if item['message']['featureType'] not in ['newSketch', 'extrude']:
-            return 0
+    # for item in ofs_data['features']:
+    #     if item['message']['featureType'] not in ['newSketch', 'extrude']:
+    #         print(f"methods except newSketch and extrude occurred: {item['message']['featureType']}, not support!")
+    #         return 0
 
-    # try:
     parser = FeatureListParser(onshape_client, did, wid, eid, ofs_data)
     result = parser.parse()
-
-    # except Exception as e:
-    #     print(f'feature parsing fails: {e}')
-    #     return 0
 
     if len(result["sequence"]) < 2:
         return 0
@@ -1279,52 +1349,53 @@ def process_one(link, is_load_ofs):
     return result
 
 
-def process_batch(source_dir, target_dir):
-    """
-    处理一个文件夹下全部的序列文件
-    :param source_dir:
-    :param target_dir:
-    :return:
-    """
-    DWE_DIR = source_dir
-    DATA_ROOT = os.path.dirname(DWE_DIR)
-    filenames = sorted(os.listdir(DWE_DIR))
-    for name in filenames:
-        truck_id = name.split('.')[0].split('_')[-1]
-        print("Processing truck: {}".format(truck_id))
-
-        save_dir = os.path.join(DATA_ROOT, "processed/{}".format(truck_id))
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        dwe_path = os.path.join(DWE_DIR, name)
-        with open(dwe_path, 'r') as fp:
-            dwe_data = yaml.safe_load(fp)
-
-        total_n = len(dwe_data)
-        count = Parallel(n_jobs=10, verbose=2)(delayed(process_one)(data_id, link, save_dir)
-                                               for data_id, link in dwe_data.items())
-        count = np.array(count)
-        print("valid: {}\ntotal:{}".format(np.sum(count > 0), total_n))
-        print("distribution:")
-        for n in np.unique(count):
-            print(n, np.sum(count == n))
+# def process_batch(source_dir, target_dir):
+#     """
+#     处理一个文件夹下全部的序列文件
+#     :param source_dir:
+#     :param target_dir:
+#     :return:
+#     """
+#     DWE_DIR = source_dir
+#     DATA_ROOT = os.path.dirname(DWE_DIR)
+#     filenames = sorted(os.listdir(DWE_DIR))
+#     for name in filenames:
+#         truck_id = name.split('.')[0].split('_')[-1]
+#         print("Processing truck: {}".format(truck_id))
+#
+#         save_dir = os.path.join(DATA_ROOT, "processed/{}".format(truck_id))
+#         if not os.path.exists(save_dir):
+#             os.makedirs(save_dir)
+#
+#         dwe_path = os.path.join(DWE_DIR, name)
+#         with open(dwe_path, 'r') as fp:
+#             dwe_data = yaml.safe_load(fp)
+#
+#         total_n = len(dwe_data)
+#         count = Parallel(n_jobs=10, verbose=2)(delayed(process_one)(data_id, link, save_dir)
+#                                                for data_id, link in dwe_data.items())
+#         count = np.array(count)
+#         print("valid: {}\ntotal:{}".format(np.sum(count > 0), total_n))
+#         print("distribution:")
+#         for n in np.unique(count):
+#             print(n, np.sum(count == n))
 
 
 def test():
     data_examples = {
-        '00000352': 'https://cad.onshape.com/documents/4185972a944744d8a7a0f2b4/w/d82d7eef8edf4342b7e49732/e/b6d6b562e8b64e7ea50d8325',
+        # '00000352': 'https://cad.onshape.com/documents/4185972a944744d8a7a0f2b4/w/d82d7eef8edf4342b7e49732/e/b6d6b562e8b64e7ea50d8325',
         # '00001272': 'https://cad.onshape.com/documents/b53ece83d8964b44bbf1f8ed/w/6b2f1aad3c43402c82009c85/e/91cb13b68f164c2eba845ce6',
         # '00001616': 'https://cad.onshape.com/documents/8c3b97c1382c43bab3eb1b48/w/43439c4e192347ecbf818421/e/63b575e3ac654545b571eee6',
-        # '00000351345632': 'https://cad.onshape.com/documents/26184933976172ce6c3c2f4f/w/cc130d2a3aa0f3c24518a07a/e/ab569ae0a7bd1248ace5a14a',
+        '00000351345632': 'https://cad.onshape.com/documents/f8d3a3b2ddfbc6077f810cbc/w/50c3f52b580a97326eb89747/e/a824129468cfbb9a5a7f6bd0',
+
     }
 
     for data_id, link in data_examples.items():
-        print(data_id)
+        # print(data_id)
 
         # try:
-        process_one(link, False)
-        print('all success')
+        process_one(link, True)
+        print('trans finished')
         # except Exception as e:
         #     print(f'exception: {e}')
 
