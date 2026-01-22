@@ -233,18 +233,9 @@ def parse_edge_msg(val6th_ofs):
         elif k == 'controlPoints':
             v = parse_past_last_msg_val_list(v_ofs)
 
-
-
-
-
-        elif isinstance(v_ofs, list):
-            v = [round(x['message']['value'], 8) for x in v_ofs]
-
         else:
-            if isinstance(v_ofs, float):
-                v = round(v_ofs, 8)
-            else:
-                v = v_ofs
+            warn(f'not considered key occurred: {k}, save directly')
+            v = v_ofs
 
         edge_param[k] = v
 
