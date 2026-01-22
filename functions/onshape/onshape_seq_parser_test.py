@@ -927,16 +927,16 @@ class FeatureListParser(object):
         self.profile2sketch = {}
 
     @staticmethod
-    def parse_feature_param(feat_param_data):
+    def parse_feature_param(fea_item_msg_param_ofs):
         param_dict = {}
-        for i, param_item in enumerate(feat_param_data):
+        for i, param_item in enumerate(fea_item_msg_param_ofs):
             param_msg = param_item['message']
-            param_id = param_msg['parameterId']
+            param_id = param_msg['parameterId']  # sketchPlane
 
             if 'queries' in param_msg:
                 param_value = []
                 for j in range(len(param_msg['queries'])):
-                    param_value.extend(param_msg['queries'][j]['message']['geometryIds'])
+                    param_value.extend(param_msg['queries'][j]['message']['geometryIds'])  # [JDC]
 
             elif 'expression' in param_msg:
                 param_value = param_msg['expression']
@@ -950,8 +950,8 @@ class FeatureListParser(object):
             param_dict[param_id] = param_value
         return param_dict
 
-    def _parse_sketch(self, feature_data):
-        sket_parser = SketchParser(self.client, feature_data, self.did, self.wid, self.eid)
+    def _parse_sketch(self, fea_item_msg_ofs):
+        sket_parser = SketchParser(self.client, fea_item_msg_ofs, self.did, self.wid, self.eid)
         save_dict = sket_parser.parse_to_fusion360_format()
         return save_dict
 
@@ -1086,29 +1086,29 @@ class FeatureListParser(object):
         result = {"entities": OrderedDict(), "properties": {}, "sequence": []}
 
         for i, feat_item in enumerate(self.feature_list['features']):
-            feat_data = feat_item['message']
-            feat_type = feat_data['featureType']
-            feat_id = feat_data['featureId']
+            fea_item_msg_ofs = feat_item['message']
+            feat_type = fea_item_msg_ofs['featureType']
+            feat_id = fea_item_msg_ofs['featureId']
 
             if feat_type == 'newSketch':
-                feat_dict = self._parse_sketch(feat_data)
+                feat_dict = self._parse_sketch(fea_item_msg_ofs)
                 for pf_key in feat_dict['profiles'].keys():
                     self.profile2sketch[pf_key] = feat_id
 
             elif feat_type == 'extrude':
-                feat_dict = self._parse_extrude(feat_data)
+                feat_dict = self._parse_extrude(fea_item_msg_ofs)
                 feat_dict['type'] = 'None'
 
             elif feat_type == 'revolve':  # 旋转
-                feat_dict = self._parse_revolve(feat_data)
+                feat_dict = self._parse_revolve(fea_item_msg_ofs)
                 feat_dict['type'] = 'None'
 
             elif feat_type == 'loft':  # 放样
-                feat_dict = self._parse_loft(feat_data)
+                feat_dict = self._parse_loft(fea_item_msg_ofs)
                 feat_dict['type'] = 'None'
 
             elif feat_type == 'sweep':  # 扫描
-                feat_dict = self._parse_sweep(feat_data)
+                feat_dict = self._parse_sweep(fea_item_msg_ofs)
                 feat_dict['type'] = 'None'
 
             elif feat_type == '线性阵列、圆周阵列？':
@@ -1137,17 +1137,17 @@ class SketchParser(object):
     """
     A parser for OnShape sketch feature list
     """
-    def __init__(self, client, feat_data, did, wid, eid):
+    def __init__(self, client, fea_item_msg_ofs, did, wid, eid):
         self.client = client
-        self.feat_id = feat_data['featureId']
-        self.feat_name = feat_data['name']
-        self.feat_param = FeatureListParser.parse_feature_param(feat_data['parameters'])
+        self.feat_id = fea_item_msg_ofs['featureId']  # FlWH1mrqLpBuR3O_0
+        self.feat_name = fea_item_msg_ofs['name']  # Sketch 1
+        self.feat_param = FeatureListParser.parse_feature_param(fea_item_msg_ofs['parameters'])  #
 
         self.did = did
         self.wid = wid
         self.eid = eid
 
-        geo_id = self.feat_param["sketchPlane"][0]
+        geo_id = self.feat_param["sketchPlane"][0]  # JDC
         response = self.client.get_entity_by_id(did, wid, eid, [geo_id], "FACE")
 
         timestamp = datetime.now().strftime('%H%M%S')
@@ -1389,12 +1389,63 @@ def process_one(link, is_load_ofs):
 SAVE_ROOT = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\four_type_ofs'
 
 
+def test_read():
+    json_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\four_type_ofs\sketch_topology_581_093424.json'
+    with open(json_file, 'r') as f:
+        res_msg = json.load(f)
+
+    res_msg = res_msg['result']['message']['value']
+
+    topo = {}
+    for item in res_msg:
+        k_str = item['message']['key']['message']['value']  # faces, edges
+        v_item = item['message']['value']['message']['value']
+        outer_list = []
+
+        for item_x in v_item:
+            v_item_x = item_x['message']['value']
+            geo_dict = {}
+
+            for item_y in v_item_x:
+                k = item_y['message']['key']['message']['value']  # id, edges/vertices
+                v_msg = item_y['message']['value']
+
+                if k == 'param':
+                    if k_str == 'faces':
+                        v = MyClient.parse_face_msg(v_msg)[0]
+
+                    elif k_str == 'edges':
+                        v = MyClient.parse_edge_msg(v_msg)[0]
+
+                    elif k_str == 'vertices':
+                        v = MyClient.parse_vertex_msg(v_msg)[0]
+
+                    else:
+                        raise ValueError
+
+                elif isinstance(v_msg['message']['value'], list):
+                    v = [a['message']['value'] for a in v_msg['message']['value']]
+
+                else:
+                    v = v_msg['message']['value']
+
+                geo_dict.update({k: v})
+            outer_list.append(geo_dict)
+        topo.update({k_str: outer_list})
+
+    res_topo = topo
+    return topo
+
+
 def test():
     model_link = 'https://cad.onshape.com/documents/f8d3a3b2ddfbc6077f810cbc/w/50c3f52b580a97326eb89747/e/a824129468cfbb9a5a7f6bd0'
 
-
     process_one(model_link, False)
     print('trans finished')
+
+
+
+
 
 
 

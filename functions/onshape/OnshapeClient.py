@@ -372,13 +372,13 @@ class OnshapeClient(Client):
 
                     if k == 'param':
                         if k_str == 'faces':
-                            v = MyClient.parse_face_msg(v_msg)[0]
+                            v = OnshapeClient.parse_face_msg(v_msg)[0]
 
                         elif k_str == 'edges':
-                            v = MyClient.parse_edge_msg(v_msg)[0]
+                            v = OnshapeClient.parse_edge_msg(v_msg)[0]
 
                         elif k_str == 'vertices':
-                            v = MyClient.parse_vertex_msg(v_msg)[0]
+                            v = OnshapeClient.parse_vertex_msg(v_msg)[0]
 
                         else:
                             raise ValueError
@@ -393,6 +393,141 @@ class OnshapeClient(Client):
                 outer_list.append(geo_dict)
             topo.update({k_str: outer_list})
         return topo
+
+    def eval_sketch_topology(self, did, wid, eid, sketch_feat_id):
+        body = {
+            "script":
+                "function(context is Context, queries) { "
+                "   var topo = {};"
+                "   topo.faces = [];"
+                "   topo.edges = [];"
+                "   topo.vertices = [];"
+                "   var all_edge_ids = [];"
+                "   var all_vertex_ids = [];"
+                "                           "
+                "   var q_face = qSketchRegion(makeId(\"%s\"));" % sketch_feat_id +
+                "   var face_arr = evaluateQuery(context, q_face);"
+                "   for (var i = 0; i < size(face_arr); i += 1) {"
+                "       var face_topo = {};"
+                "       const face_id = transientQueriesToStrings(face_arr[i]);"
+                "       face_topo.id = face_id;"
+                "       face_topo.edges = [];"
+                "       face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});"
+                "                            "
+
+                "       var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);"
+                "       var edge_arr = evaluateQuery(context, q_edge);"
+                "       for (var j = 0; j < size(edge_arr); j += 1) {"
+                "           var edge_topo = {};"
+                "           const edge_id = transientQueriesToStrings(edge_arr[j]);"
+                "           edge_topo.id = edge_id;"
+                "           edge_topo.vertices = [];"
+                "           edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});"
+                "           face_topo.edges = append(face_topo.edges, edge_id);"
+                "                                  "
+                "           var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);"
+                "           var vertex_arr = evaluateQuery(context, q_vertex);"
+                "           for (var k = 0; k < size(vertex_arr); k += 1) {"
+                "               var vertex_topo = {};"
+                "               const vertex_id = transientQueriesToStrings(vertex_arr[k]);"
+                "               vertex_topo.id = vertex_id;"
+                "               vertex_topo.param = evVertexPoint(context, {vertex: vertex_arr[k]});"
+                "               edge_topo.vertices = append(edge_topo.vertices, vertex_id);"
+                "               if (isIn(vertex_id, all_vertex_ids)){continue;}"
+                "               all_vertex_ids = append(all_vertex_ids, vertex_id);"
+                "               topo.vertices = append(topo.vertices, vertex_topo);"
+                "           }"
+                "           if (isIn(edge_id, all_edge_ids)){continue;}"
+                "           all_edge_ids = append(all_edge_ids, edge_id);"
+                "           topo.edges = append(topo.edges, edge_topo);"
+                "       }"
+                "       topo.faces = append(topo.faces, face_topo);"
+                "   }"
+                "   return topo;"
+                "}",
+            "queries": []
+        }
+        res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
+        return res.json()
+
+    def eval_multi_sketch_topology(self, did, wid, eid, sketch_feat_id_list):
+        """
+        通过草图特征解析拓扑结构，包含草图区域，边、角点等
+
+        Args:
+            - did (str): Document ID
+            - wid (str): Workspace ID
+            - eid (str): Element ID
+            - feat_id (str): Feature ID of a sketch
+
+        Returns:
+            - dict: a hierarchical parametric representation
+        """
+        body = {
+            "script":
+                "function(context is Context, queries) { "
+                "   var res_list = [];"
+                
+                "   var q_arr = [" + ",".join([f"\"{fid}\"" for fid in sketch_feat_id_list]) + "];"
+                
+                "   for (var l = 0; l < size(q_arr); l+= 1){"
+                
+                "      var topo = {};"
+                "      topo.faces = [];"
+                "      topo.edges = [];"
+                "      topo.vertices = [];"
+                "      var all_edge_ids = [];"
+                "      var all_vertex_ids = [];"
+
+                "      var q_face = qSketchRegion(makeId(q_arr[l]));"
+                "      var face_arr = evaluateQuery(context, q_face);"
+                "      for (var i = 0; i < size(face_arr); i += 1) {"
+                "          var face_topo = {};"
+                "          const face_id = transientQueriesToStrings(face_arr[i]);"
+                "          face_topo.id = face_id;"
+                "          face_topo.edges = [];"
+                "          face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});"
+
+                "          var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);"
+                "          var edge_arr = evaluateQuery(context, q_edge);"
+                "          for (var j = 0; j < size(edge_arr); j += 1) {"
+                "              var edge_topo = {};"
+                "              const edge_id = transientQueriesToStrings(edge_arr[j]);"
+                "              edge_topo.id = edge_id;"
+                "              edge_topo.vertices = [];"
+                "              edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});" # 
+                "              face_topo.edges = append(face_topo.edges, edge_id);"
+
+                "              var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);"
+                "              var vertex_arr = evaluateQuery(context, q_vertex);"
+                "              for (var k = 0; k < size(vertex_arr); k += 1) {"
+                "                  var vertex_topo = {};"
+                "                  const vertex_id = transientQueriesToStrings(vertex_arr[k]);"
+                "                  vertex_topo.id = vertex_id;"
+                "                  vertex_topo.param = evVertexPoint(context, {vertex: vertex_arr[k]});"
+                "                  edge_topo.vertices = append(edge_topo.vertices, vertex_id);"
+                "                  if (isIn(vertex_id, all_vertex_ids)){continue;}"
+                "                  all_vertex_ids = append(all_vertex_ids, vertex_id);"
+                "                  topo.vertices = append(topo.vertices, vertex_topo);"
+                "              }"
+                "              if (isIn(edge_id, all_edge_ids)){continue;}"
+                "              all_edge_ids = append(all_edge_ids, edge_id);"
+                "              topo.edges = append(topo.edges, edge_topo);"
+                "          }"
+                "          topo.faces = append(topo.faces, face_topo);"
+                "      }"
+                "      res_list = append(res_list, topo);"
+                "   }"
+                
+                "   return res_list;"
+                "}",
+            "queries": []
+        }
+        res = self._api.request('post',
+                                '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
+                                body=body)
+
+        return res.json()
 
     @staticmethod
     def parse_vertex_msg(response):

@@ -4,9 +4,10 @@
 import math
 from functions.onshape.OspPoint import OspPoint
 import numpy as np
+from functions.onshape import macro, utils
 
 
-def covert_to_numpy(osp_point_list):
+def point_list_to_numpy(osp_point_list):
     np_list = []
     for c_osp in osp_point_list:
         np_list.append(c_osp.to_numpy())
@@ -108,7 +109,7 @@ class OspLine(object):
             c_point = self.start_point + t * direction
             points.append(c_point)  # 保持 OspPoint 类型
 
-        return covert_to_numpy(points)
+        return point_list_to_numpy(points)
 
 
 class OspCircle(object):
@@ -200,35 +201,50 @@ class OspCircle(object):
             dest = center + r * (ct * u + st * v)
             points.append(dest)
 
-        return covert_to_numpy(points)
+        return point_list_to_numpy(points)
 
 
 class SketchPlane(object):
-    def __init__(self, res_msg_val_item_ofs):
+    def __init__(self, origin, normal, sketch_x, unit):
         """
 
         :param res_msg_val_item_ofs: 通过 api 解析出的 json 字典
         """
+        self.origin = origin
+        self.normal = normal
+        self.sketch_x = sketch_x
+        self.unit = unit
+
+        # 由 onshape 定义，草图局部坐标系 y 方向等于 normal cross x
+        self.sketch_y = self.normal.cross(self.sketch_x)
+
+    @classmethod
+    def from_ofs(cls, res_msg_val_item_ofs):
+        """
+        从 onshape 解析出的 feature_list 构造平面
+        :param res_msg_val_item_ofs:
+        :return:
+        """
         val2nd_list_ofs = res_msg_val_item_ofs['message']['value']
 
-        self.origin = None
-        self.normal = None
-        self.sketch_x = None
-        self.units = []
+        origin = None
+        normal = None
+        sketch_x = None
+        units = []
 
         for val2nd_item_ofs in val2nd_list_ofs:
             val_type = val2nd_item_ofs['message']['key']['message']['value']
             val4th_ofs_list = val2nd_item_ofs['message']['value']['message']['value']
             if val_type == 'normal':
-                self.normal = self.extract_4th_ofs_point(val4th_ofs_list, False)
+                normal = cls.extract_4th_ofs_point(val4th_ofs_list, False)
 
             elif val_type == 'origin':
-                c_orign, units = self.extract_4th_ofs_point(val4th_ofs_list, True)
-                self.origin = c_orign
-                self.units.extend(units)
+                c_orign, units = cls.extract_4th_ofs_point(val4th_ofs_list, True)
+                origin = c_orign
+                units.extend(units)
 
             elif val_type == 'x':
-                self.sketch_x = self.extract_4th_ofs_point(val4th_ofs_list, False)
+                sketch_x = cls.extract_4th_ofs_point(val4th_ofs_list, False)
 
             elif val_type == 'surfaceType':
                 assert val4th_ofs_list == 'PLANE'
@@ -236,16 +252,15 @@ class SketchPlane(object):
             else:
                 raise TypeError(f'this sketch plane is not plane: {val4th_ofs_list}')
 
-        assert self.normal is not None and self.origin is not None and self.sketch_x is not None and self.units
+        assert normal is not None and origin is not None and sketch_x is not None and units
 
         # 测试将局部坐标系原点永远与世界坐标系原点到平面的投影点重合
-        self.origin = proj_to_plane(OspPoint(0, 0, 0, False), self.origin, self.normal)
+        origin = proj_to_plane(OspPoint(0, 0, 0, False), origin, normal)
 
-        assert len(set(self.units)) == 1
-        self.units = self.units[0]
+        assert len(set(units)) == 1
+        units = units[0]
 
-        # 由 onshape 定义，草图局部坐标系 y 方向等于 normal cross x
-        self.sketch_y = self.normal.cross(self.sketch_x)
+        return cls(origin, normal, sketch_x, units)
 
     @staticmethod
     def extract_4th_ofs_point(val4th_ofs_list, with_units):
@@ -266,7 +281,7 @@ class SketchPlane(object):
                 c_unit_key = val4th_item_ofs['message']['unitToPower'][0]['key']
                 c_unit_val = val4th_item_ofs['message']['unitToPower'][0]['value']
 
-                c_unit = f'{c_unit_key}:{c_unit_val}'
+                c_unit = (c_unit_key, float(c_unit_val))
                 all_units.append(c_unit)
 
         assert len(all_vals) == 3
@@ -285,23 +300,19 @@ class SketchPlane(object):
         :return:
         """
         # onshape 默认英尺，导出时是米，因此换算
-        if self.units == 'METER:1':
-            trans_coff = 39.3701
-
-        else:
-            raise NotImplementedError
+        mul_unit = utils.get_unit_trans_coff(self.unit, macro.GLOBAL_UNIT)
 
         if isinstance(other, OspPoint):
 
             assert other.is_2d
 
             point_3d = self.origin + other.x * self.sketch_x + other.y * self.sketch_y
-            point_3d = trans_coff * point_3d
+            point_3d = mul_unit * point_3d
             assert not point_3d.is_2d
             return point_3d
 
         elif isinstance(other, (int, float)):
-            return trans_coff * other
+            return mul_unit * other
 
         else:
             raise NotImplementedError

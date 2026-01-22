@@ -603,8 +603,8 @@ def get_default_plane_id():
 def test_deepcad_onshape_parser():
     # onshape_seq_parser.test()
     onshape_seq_parser.test_parse_sketch()
-    # from functions.onshape.onshape_seq_parser_test import test
-    # test()
+    # from functions.onshape import onshape_seq_parser_test as ot
+    # ot.test_read()
 
 
 def vis_cst_pcd():
