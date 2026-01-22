@@ -499,6 +499,12 @@ class MyClient(Client):
             "queries": [{ "key" : "id", "value" : geo_id }]
         }
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
+
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'get_ent_by_id_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(res.json(), f, ensure_ascii=False, indent=4)
+
         return res
 
     def eval_sketch_topology_by_adjacency(self, did, wid, eid, feat_id):
@@ -571,9 +577,10 @@ class MyClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         res_msg = res.json()['result']['message']['value']
 
-        # with open(r'E:\document\DeepLearningIdea\multi_cmd_seq_gen\sketch_topo.json', 'w') as f:
-        #     json.dump(res_msg, f, ensure_ascii=False, indent=4)
-        # exit('qeeeeeeeeeeeeeeeeeeee')
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'sketch_topology_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(res.json(), f, ensure_ascii=False, indent=4)
 
         topo = {}
         for item in res_msg:
@@ -671,16 +678,7 @@ class MyClient(Client):
                 if k == 'coordSystem':
                     v = MyClient.parse_coord_msg(v_item)
                 elif isinstance(v_item, list):
-
-                    try:
-                        v = [round(x['message']['value'], 8) for x in v_item]
-                    except:
-                        all_vals = [x['message']['value'] for x in v_item]
-
-                        with open(r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs2.json', 'w') as f:
-                            json.dump(v_item, f, ensure_ascii=False, indent=4)
-                        exit(f'-------{k}---------')
-
+                    v = [round(x['message']['value'], 8) for x in v_item]
                 else:
                     if isinstance(v_item, float):
                         v = round(v_item, 8)
@@ -753,6 +751,11 @@ class MyClient(Client):
         }
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'entity_ids_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(res.json(), f, ensure_ascii=False, indent=4)
+
         res_msg = res.json()['result']['message']['value']
         entityIDs = [item['message']['value'].encode(encoding='UTF-8') for item in res_msg]
         return entityIDs
@@ -802,6 +805,11 @@ class MyClient(Client):
         }
         response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'bnd_box_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(response.json(), f, ensure_ascii=False, indent=4)
+
         bbox_values = response.json()['result']['message']['value']
         result = {}
         for item in bbox_values:
@@ -850,6 +858,12 @@ class MyClient(Client):
         }
         # res = c.get_entity_by_id(did, wid, eid, 'JGV', 'EDGE')
         response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
+
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'mid_point_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(response.json(), f, ensure_ascii=False, indent=4)
+
         point_info = response.json()['result']['message']['value']
         midpoint = [x['message']['value'] for x in point_info]
         return midpoint
@@ -858,7 +872,20 @@ class MyClient(Client):
         """
         convert value expresson to meter unit
         """
-        float_val = float(expr.split(' ')[0])
+        val, unit = expr.split(' ')
+
+        if unit == 'in':
+            val = float(val) * 0.0254
+
+        elif unit == 'METER':
+            val = float(val)
+
+        else:
+            raise NotImplementedError
+
+        return val
+
+        float_val = float([0])
         print(f'{expr} trans to {float_val}')
         return float_val
 
@@ -875,14 +902,14 @@ class MyClient(Client):
 
 
 class FeatureListParser(object):
-    def __init__(self, client, did, wid, eid, feature_list=None):
+    def __init__(self, client, did, wid, eid, orig_ofs=None):
         """
         A parser for OnShape feature list (construction sequence)
         :param client:
         :param did:
         :param wid:
         :param eid:
-        :param feature_list:
+        :param orig_ofs:
         """
         self.client = client
 
@@ -890,12 +917,12 @@ class FeatureListParser(object):
         self.wid = wid
         self.eid = eid
 
-        if feature_list is None:
+        if orig_ofs is None:
             print('get feature_list by onshape_api request')
             self.feature_list = self.client.get_features(did, wid, eid).json()
         else:
             print('load feature_list')
-            self.feature_list = feature_list
+            self.feature_list = orig_ofs
 
         self.profile2sketch = {}
 
@@ -1009,6 +1036,12 @@ class FeatureListParser(object):
                         "type": "DistanceExtentDefinition"
                     },
                     }
+
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'parse_extrude_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(save_dict, f, ensure_ascii=False, indent=4)
+
         return save_dict
 
     def _parse_revolve(self, feature_data):
@@ -1052,9 +1085,6 @@ class FeatureListParser(object):
         """
         result = {"entities": OrderedDict(), "properties": {}, "sequence": []}
 
-        # bbox = self._parse_bounding_box()
-        # result["properties"].update({"bounding_box": bbox})
-
         for i, feat_item in enumerate(self.feature_list['features']):
             feat_data = feat_item['message']
             feat_type = feat_data['featureType']
@@ -1067,28 +1097,38 @@ class FeatureListParser(object):
 
             elif feat_type == 'extrude':
                 feat_dict = self._parse_extrude(feat_data)
+                feat_dict['type'] = 'None'
 
             elif feat_type == 'revolve':  # 旋转
                 feat_dict = self._parse_revolve(feat_data)
+                feat_dict['type'] = 'None'
 
             elif feat_type == 'loft':  # 放样
                 feat_dict = self._parse_loft(feat_data)
+                feat_dict['type'] = 'None'
 
             elif feat_type == 'sweep':  # 扫描
                 feat_dict = self._parse_sweep(feat_data)
+                feat_dict['type'] = 'None'
 
             elif feat_type == '线性阵列、圆周阵列？':
-                feat_dict = self._parse_sweep(feat_data)
+                feat_dict = {}
+                feat_dict['type'] = 'None'
 
             else:
+                print(f'unsupported feature type: {feat_type}')
+                feat_dict = {}
+                feat_dict['type'] = 'None'
+                continue
                 raise NotImplementedError("unsupported feature type: {}".format(feat_type))
 
             result["entities"][feat_id] = feat_dict
             result["sequence"].append({"index": i, "type": feat_dict['type'], "entity": feat_id})
 
-        # with open(r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\all_sketches.json', 'w') as f:
-        #     json.dump(feat_dict, f, ensure_ascii=False, indent=4)
-        # exit('---------sketch info save finished-------')
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'parse_res_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(result, f, ensure_ascii=False, indent=4)
 
         return result
 
@@ -1110,16 +1150,19 @@ class SketchParser(object):
         geo_id = self.feat_param["sketchPlane"][0]
         response = self.client.get_entity_by_id(did, wid, eid, [geo_id], "FACE")
 
-        # with open(rf'E:\document\DeeplearningIdea\multi_cmd_seq_gen\face_resp_{sys._getframe(0).f_lineno}.json', 'w') as f:
-        #     json.dump(response.json(), f, ensure_ascii=False, indent=4)
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'face_resp_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(response.json(), f, ensure_ascii=False, indent=4)
 
         self.plane = self.client.parse_face_msg(response.json()['result']['message']['value'])[0]
 
         self.geo_topo = self.client.eval_sketch_topology_by_adjacency(did, wid, eid, self.feat_id)
 
-        # with open(r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs2.json', 'w') as f:
-        #     json.dump(self.geo_topo, f, ensure_ascii=False, indent=4)
-        # exit('---------qqwqwqwq-------')
+        timestamp = datetime.now().strftime('%H%M%S')
+        target_path = os.path.join(SAVE_ROOT, f'face_topo_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        with open(target_path, 'w') as f:
+            json.dump(response.json(), f, ensure_ascii=False, indent=4)
 
         self._to_local_coordinates()
         self._build_lookup()
@@ -1290,7 +1333,7 @@ class SketchParser(object):
         profiles_dict = {}
         for item in self.geo_topo['faces']:
             # profile level
-            profile_id = item['id']
+            profile_id = item['id']  # 目标 JGC
             all_edge_ids = item['edges']
             edge_ids_per_loop = self._parse_edges_to_loops(all_edge_ids)
             all_loops = []
@@ -1319,28 +1362,22 @@ def process_one(link, is_load_ofs):
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
     # filter data that use operations other than sketch + extrude
-    ofs_json_file = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs_orig.json'
+    ofs_json_file = os.path.join(SAVE_ROOT, 'orig_ofs.json')
     if is_load_ofs:
         with open(ofs_json_file, 'r') as f:
-            ofs_data = json.load(f)
+            orig_ofs = json.load(f)
 
     else:
-        ofs_data = onshape_client.get_features(did, wid, eid).json()
+        orig_ofs = onshape_client.get_features(did, wid, eid).json()
         try:
             with open(ofs_json_file, 'w') as f:
-                json.dump(ofs_data, f, ensure_ascii=False, indent=4)
+                json.dump(orig_ofs, f, ensure_ascii=False, indent=4)
 
         except Exception as e:
             print(e)
             exit(0)
 
-    # 如果存在除了拉伸之外的命令，直接跳过
-    # for item in ofs_data['features']:
-    #     if item['message']['featureType'] not in ['newSketch', 'extrude']:
-    #         print(f"methods except newSketch and extrude occurred: {item['message']['featureType']}, not support!")
-    #         return 0
-
-    parser = FeatureListParser(onshape_client, did, wid, eid, ofs_data)
+    parser = FeatureListParser(onshape_client, did, wid, eid, orig_ofs)
     result = parser.parse()
 
     if len(result["sequence"]) < 2:
@@ -1349,59 +1386,15 @@ def process_one(link, is_load_ofs):
     return result
 
 
-# def process_batch(source_dir, target_dir):
-#     """
-#     处理一个文件夹下全部的序列文件
-#     :param source_dir:
-#     :param target_dir:
-#     :return:
-#     """
-#     DWE_DIR = source_dir
-#     DATA_ROOT = os.path.dirname(DWE_DIR)
-#     filenames = sorted(os.listdir(DWE_DIR))
-#     for name in filenames:
-#         truck_id = name.split('.')[0].split('_')[-1]
-#         print("Processing truck: {}".format(truck_id))
-#
-#         save_dir = os.path.join(DATA_ROOT, "processed/{}".format(truck_id))
-#         if not os.path.exists(save_dir):
-#             os.makedirs(save_dir)
-#
-#         dwe_path = os.path.join(DWE_DIR, name)
-#         with open(dwe_path, 'r') as fp:
-#             dwe_data = yaml.safe_load(fp)
-#
-#         total_n = len(dwe_data)
-#         count = Parallel(n_jobs=10, verbose=2)(delayed(process_one)(data_id, link, save_dir)
-#                                                for data_id, link in dwe_data.items())
-#         count = np.array(count)
-#         print("valid: {}\ntotal:{}".format(np.sum(count > 0), total_n))
-#         print("distribution:")
-#         for n in np.unique(count):
-#             print(n, np.sum(count == n))
+SAVE_ROOT = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\four_type_ofs'
 
 
 def test():
-    data_examples = {
-        # '00000352': 'https://cad.onshape.com/documents/4185972a944744d8a7a0f2b4/w/d82d7eef8edf4342b7e49732/e/b6d6b562e8b64e7ea50d8325',
-        # '00001272': 'https://cad.onshape.com/documents/b53ece83d8964b44bbf1f8ed/w/6b2f1aad3c43402c82009c85/e/91cb13b68f164c2eba845ce6',
-        # '00001616': 'https://cad.onshape.com/documents/8c3b97c1382c43bab3eb1b48/w/43439c4e192347ecbf818421/e/63b575e3ac654545b571eee6',
-        '00000351345632': 'https://cad.onshape.com/documents/f8d3a3b2ddfbc6077f810cbc/w/50c3f52b580a97326eb89747/e/a824129468cfbb9a5a7f6bd0',
-
-    }
-
-    for data_id, link in data_examples.items():
-        # print(data_id)
-
-        # try:
-        process_one(link, True)
-        print('trans finished')
-        # except Exception as e:
-        #     print(f'exception: {e}')
+    model_link = 'https://cad.onshape.com/documents/f8d3a3b2ddfbc6077f810cbc/w/50c3f52b580a97326eb89747/e/a824129468cfbb9a5a7f6bd0'
 
 
-
-
+    process_one(model_link, False)
+    print('trans finished')
 
 
 

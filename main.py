@@ -5,7 +5,8 @@ import shutil
 import numpy as np
 
 from utils import vis, utils
-from functions import step_proc, img_proc, onshape_seq_parser
+from functions import step_proc, img_proc
+from functions.onshape import onshape_seq_parser
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -600,7 +601,10 @@ def get_default_plane_id():
 
 
 def test_deepcad_onshape_parser():
-    onshape_seq_parser.test()
+    # onshape_seq_parser.test()
+    onshape_seq_parser.test_parse_sketch()
+    # from functions.onshape.onshape_seq_parser_test import test
+    # test()
 
 
 def vis_cst_pcd():
@@ -733,6 +737,7 @@ if __name__ == '__main__':
     # vis_cst_pcd()
     # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
     # vis_pcd_gen()
+
     test_deepcad_onshape_parser()
 
     pass
