@@ -63,11 +63,10 @@ def request_sketch_plane(skh_parser_list, save_path, model_url):
     return res.json()
 
 
-def request_sketch_topology(skh_parser_list, save_path, model_url):
+def request_sketch_topology(skh_parser_list, model_url):
     """
     批量获取草图中的全部区域信息
     :param skh_parser_list:
-    :param save_path:
     :param model_url:
     :return:
     """
@@ -81,14 +80,12 @@ def request_sketch_topology(skh_parser_list, save_path, model_url):
 
     # 一次请求全部的 sketch topo
     res = onshape_client.eval_multi_sketch_topology(did, wid, eid, all_sketch_id)
-
-    with open(save_path, 'w') as f:
-        json.dump(res, f, ensure_ascii=False, indent=4)
+    return res
 
 
 def test_parse_sketch():
 
-    ofs_path = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\ofs_orig.json'
+    ofs_path = os.path.join(macro.SAVE_ROOT, 'orig_ofs.json')
     with open(ofs_path, 'r') as f:
         ofs = json.load(f)
 
@@ -100,21 +97,25 @@ def test_parse_sketch():
             sketch_obj = Sketch(fea_item_ofs)
             all_sketches.append(sketch_obj)
 
-    oskh_plane_json_file = rf'E:\document\DeeplearningIdea\multi_cmd_seq_gen\sketch_plane_all.json'
+    # oskh_plane_json_file = rf'E:\document\DeeplearningIdea\multi_cmd_seq_gen\sketch_plane_all.json'
 
     # 请求服务器获取草图平面信息
     # get_sketch_plane_ofs(all_new_sketches, oskh_plane_json_file, macro.URL)
 
-    # 请求服务器获取草图区域拓扑信息
-    # timestamp = datetime.now().strftime('%H_%M_%S')
-    # target_path = os.path.join(macro.SAVE_ROOT, f'all_sketch_topo_{timestamp}.json')
-    # request_sketch_topology(all_new_sketches, target_path, macro.URL)
-    # print('save sll sketch topo succeed!')
+    # 请求服务器一次获取所有草图区域拓扑信息
+    all_sketch_topo = request_sketch_topology(all_sketches, macro.URL)
+
+    timestamp = datetime.now().strftime('%H_%M_%S')
+    target_path = os.path.join(macro.SAVE_ROOT, f'all_sketch_topo_{timestamp}.json')
+
+    with open(target_path, 'w') as f:
+        json.dump(all_sketch_topo, f, ensure_ascii=False, indent=4)
+    print('save all sketch topo succeed!')
 
     # 解析全部草图参数
-    all_topo_file = os.path.join(macro.SAVE_ROOT, 'all_sketch_topo_186_12_27_09.json')
-    with open(all_topo_file, 'r') as f:
-        all_sketch_topo = json.load(f)
+    # all_topo_file = os.path.join(macro.SAVE_ROOT, 'all_sketch_topo_186_12_27_09.json')
+    # with open(all_topo_file, 'r') as f:
+    #     all_sketch_topo = json.load(f)
 
     val1st_ofs = all_sketch_topo['result']['message']['value']
 
@@ -125,12 +126,12 @@ def test_parse_sketch():
 
     # all_topo_parsed = SketchParser.parse_multi_sketch_topo(all_sketch_topo)
 
-    with open(oskh_plane_json_file, 'r') as f:
-        all_planes = json.load(f)['result']['message']['value']
+    # with open(oskh_plane_json_file, 'r') as f:
+    #     all_planes = json.load(f)['result']['message']['value']
 
     # 获取每个平面的参数
-    for sketch, plane in zip(all_sketches, all_planes):
-        sketch.load_sketch_plane(plane)
+    # for sketch, plane in zip(all_sketches, all_planes):
+    #     sketch.load_sketch_plane(plane)
 
     # 获取绘图元素：
     all_plots = []

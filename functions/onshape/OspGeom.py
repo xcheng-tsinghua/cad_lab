@@ -113,7 +113,13 @@ class OspLine(object):
 
 
 class OspCircle(object):
-    def __init__(self, center_point, radius, normal, is_2d):
+    """
+    表示圆或者圆弧
+    圆弧比整圆多两个端点
+    z方向呈右手系旋转
+    TODO: 添加圆弧的表达实现
+    """
+    def __init__(self, center_point, radius, normal, start_point, end_point, is_2d):
         """
 
         :param center_point:
@@ -202,6 +208,48 @@ class OspCircle(object):
             points.append(dest)
 
         return point_list_to_numpy(points)
+
+
+class Ellipse(object):
+    """
+    表达椭圆
+    """
+    def __init__(self, origin, coor_x, coor_z, major_radius, minor_radius, start_point, end_point):
+        """
+        椭圆需要 中心位置、长轴长度、短轴长度、坐标系 X 方向为长轴方向，Z方向以右手系表达旋转方向
+        椭圆弧比椭圆多两个端点
+        """
+        self.origin = origin
+        self.coor_x = coor_x
+        self.coor_z = coor_z
+        self.major_radius = major_radius
+        self.minor_radius = minor_radius
+        self.start_point = start_point
+        self.end_point = end_point
+
+
+class BSpline(object):
+    """
+    onshape 上除了 直线、圆、椭圆 其它曲线全用 BSpline 表示
+    """
+    def __init__(self,
+                 control_points,  # point list
+                 degree,  # int
+                 dimension,  # int
+                 is_periodic,  # bool
+                 is_rational,  # bool
+                 knots,  # float list
+                 ):
+        """
+        椭圆需要长轴长度、短轴长度、坐标系 X 方向为长轴方向，Z方向以右手系表达旋转方向
+        椭圆弧比椭圆多两个端点
+        """
+        self.control_points = control_points
+        self.degree = degree
+        self.dimension = dimension
+        self.is_periodic = is_periodic
+        self.is_rational = is_rational
+        self.knots = knots
 
 
 class SketchPlane(object):

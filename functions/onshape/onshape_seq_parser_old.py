@@ -11,10 +11,8 @@
 """
 
 import os
-import yaml
 import json
 import numpy as np
-from joblib import delayed, Parallel
 import copy
 from collections import OrderedDict
 import math
@@ -28,6 +26,7 @@ import urllib
 import hmac
 import requests
 import sys
+from functions.onshape import macro
 
 
 EXTENT_TYPE_MAP = {'BLIND': 'OneSideFeatureExtentType',
@@ -500,8 +499,8 @@ class MyClient(Client):
         }
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'get_ent_by_id_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'get_ent_by_id_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(res.json(), f, ensure_ascii=False, indent=4)
 
@@ -577,8 +576,8 @@ class MyClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         res_msg = res.json()['result']['message']['value']
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'sketch_topology_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'sketch_topology_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(res.json(), f, ensure_ascii=False, indent=4)
 
@@ -751,8 +750,8 @@ class MyClient(Client):
         }
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'entity_ids_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'entity_ids_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(res.json(), f, ensure_ascii=False, indent=4)
 
@@ -805,8 +804,8 @@ class MyClient(Client):
         }
         response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'bnd_box_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'bnd_box_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(response.json(), f, ensure_ascii=False, indent=4)
 
@@ -859,8 +858,8 @@ class MyClient(Client):
         # res = c.get_entity_by_id(did, wid, eid, 'JGV', 'EDGE')
         response = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'mid_point_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'mid_point_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(response.json(), f, ensure_ascii=False, indent=4)
 
@@ -875,7 +874,7 @@ class MyClient(Client):
         val, unit = expr.split(' ')
 
         if unit == 'in':
-            val = float(val) * 0.0254
+            val = float(val) * macro.IN_TO_METER
 
         elif unit == 'METER':
             val = float(val)
@@ -951,7 +950,7 @@ class FeatureListParser(object):
         return param_dict
 
     def _parse_sketch(self, fea_item_msg_ofs):
-        sket_parser = SketchParser(self.client, fea_item_msg_ofs, self.did, self.wid, self.eid)
+        sket_parser = SketchParser(self.client, fea_item_msg_ofs, self.did, self.wid, self.eid)  # 包含 api 请求
         save_dict = sket_parser.parse_to_fusion360_format()
         return save_dict
 
@@ -1037,8 +1036,8 @@ class FeatureListParser(object):
                     },
                     }
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'parse_extrude_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'parse_extrude_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(save_dict, f, ensure_ascii=False, indent=4)
 
@@ -1091,7 +1090,7 @@ class FeatureListParser(object):
             feat_id = fea_item_msg_ofs['featureId']
 
             if feat_type == 'newSketch':
-                feat_dict = self._parse_sketch(fea_item_msg_ofs)
+                feat_dict = self._parse_sketch(fea_item_msg_ofs)  # 包含 api 请求
                 for pf_key in feat_dict['profiles'].keys():
                     self.profile2sketch[pf_key] = feat_id
 
@@ -1125,8 +1124,8 @@ class FeatureListParser(object):
             result["entities"][feat_id] = feat_dict
             result["sequence"].append({"index": i, "type": feat_dict['type'], "entity": feat_id})
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'parse_res_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'parse_res_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(result, f, ensure_ascii=False, indent=4)
 
@@ -1141,26 +1140,26 @@ class SketchParser(object):
         self.client = client
         self.feat_id = fea_item_msg_ofs['featureId']  # FlWH1mrqLpBuR3O_0
         self.feat_name = fea_item_msg_ofs['name']  # Sketch 1
-        self.feat_param = FeatureListParser.parse_feature_param(fea_item_msg_ofs['parameters'])  #
+        self.feat_param = FeatureListParser.parse_feature_param(fea_item_msg_ofs['parameters'])
 
         self.did = did
         self.wid = wid
         self.eid = eid
 
         geo_id = self.feat_param["sketchPlane"][0]  # JDC
-        response = self.client.get_entity_by_id(did, wid, eid, [geo_id], "FACE")
+        response = self.client.get_entity_by_id(did, wid, eid, [geo_id], "FACE")  # 包含 api 请求
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'face_resp_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'face_resp_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(response.json(), f, ensure_ascii=False, indent=4)
 
         self.plane = self.client.parse_face_msg(response.json()['result']['message']['value'])[0]
 
-        self.geo_topo = self.client.eval_sketch_topology_by_adjacency(did, wid, eid, self.feat_id)
+        self.geo_topo = self.client.eval_sketch_topology_by_adjacency(did, wid, eid, self.feat_id)  # 包含 api 请求
 
-        timestamp = datetime.now().strftime('%H%M%S')
-        target_path = os.path.join(SAVE_ROOT, f'face_topo_{sys._getframe(0).f_lineno}_{timestamp}.json')
+        timestamp = datetime.now().strftime('%H_%M_%S')
+        target_path = os.path.join(macro.SAVE_ROOT, f'face_topo_{sys._getframe(0).f_lineno}_{timestamp}.json')
         with open(target_path, 'w') as f:
             json.dump(response.json(), f, ensure_ascii=False, indent=4)
 
@@ -1362,7 +1361,7 @@ def process_one(link, is_load_ofs):
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
     # filter data that use operations other than sketch + extrude
-    ofs_json_file = os.path.join(SAVE_ROOT, 'orig_ofs.json')
+    ofs_json_file = os.path.join(macro.SAVE_ROOT, 'orig_ofs.json')
     if is_load_ofs:
         with open(ofs_json_file, 'r') as f:
             orig_ofs = json.load(f)
@@ -1377,16 +1376,13 @@ def process_one(link, is_load_ofs):
             print(e)
             exit(0)
 
-    parser = FeatureListParser(onshape_client, did, wid, eid, orig_ofs)
-    result = parser.parse()
+    parser = FeatureListParser(onshape_client, did, wid, eid, orig_ofs)  # 构造函数不进行 api 请求
+    result = parser.parse()  # 包含 api 请求
 
     if len(result["sequence"]) < 2:
         return 0
 
     return result
-
-
-SAVE_ROOT = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\four_type_ofs'
 
 
 def test_read():
@@ -1438,9 +1434,7 @@ def test_read():
 
 
 def test():
-    model_link = 'https://cad.onshape.com/documents/f8d3a3b2ddfbc6077f810cbc/w/50c3f52b580a97326eb89747/e/a824129468cfbb9a5a7f6bd0'
-
-    process_one(model_link, False)
+    process_one(macro.URL, False)
     print('trans finished')
 
 

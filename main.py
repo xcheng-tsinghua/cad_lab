@@ -600,11 +600,10 @@ def get_default_plane_id():
     #     print(e['name'], e['id'], e['elementType'])
 
 
-def test_deepcad_onshape_parser():
-    # onshape_seq_parser.test()
+def test_onshape_parser():
     onshape_seq_parser.test_parse_sketch()
-    # from functions.onshape import onshape_seq_parser_test as ot
-    # ot.test_read()
+    # from functions.onshape import onshape_seq_parser_old as od
+    # od.test()
 
 
 def vis_cst_pcd():
@@ -738,7 +737,7 @@ if __name__ == '__main__':
     # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
     # vis_pcd_gen()
 
-    test_deepcad_onshape_parser()
+    test_onshape_parser()
 
     pass
 
