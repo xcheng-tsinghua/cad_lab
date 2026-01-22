@@ -6,8 +6,9 @@
 """
 
 from functions.onshape.OspPoint import OspPoint
-from functions.onshape.OspGeom import OspLine, OspCircle, SketchPlane
+from functions.onshape.OspGeom import OspLine, OspCircle
 from functions.onshape import utils, macro
+from warnings import warn
 
 
 class Region(object):
@@ -21,270 +22,129 @@ class Region(object):
 
 class Sketch(object):
     """
-    A parser for OnShape sketch feature list
+    包含草图中全部区域及其几何元素
     """
-    def __init__(self, fea_item_ofs):
-        self.feat_id = fea_item_ofs['message']['featureId']
-        self.feat_name = fea_item_ofs['message']['name']
+    def __init__(self, val1st_item_ofs):
+        # 草图的区域：拉伸、旋转等都是用的区域，而非草图
+        self.sketch_topology, self.region_list = parse_sketch_topo_and_region(val1st_item_ofs)
 
-        # 获取草图平面的 id
-        self.sketch_plane_id = parse_sketch_plane_id(fea_item_ofs)
-
-        # 先不获取，为了节省 request 数，最后一起获取
-        self.sketch_plane = None
-
-        # 先不获取，为了节省 request 数，最后一起获取
-        # 获取草图的区域，原始的草图元素
-        self.sketch_topology = None
-
-        # 获取草图的区域，拉伸、旋转等都是用的区域，而非草图
-        self.region_list = None
-
-        # 获取草图的基元，原始的草图元素
-        self.primitive_list = parse_sketch_primitives(fea_item_ofs)
-
-    def load_sketch_plane(self, res_msg_val_ofs_item):
-        self.sketch_plane = SketchPlane.from_ofs(res_msg_val_ofs_item)
-
-        # 将草图中的元素都转换成 3d
-        for i, c_prim in enumerate(self.primitive_list):
-            self.primitive_list[i].map_to_3d(self.sketch_plane)
-
-    def load_sketch_topo(self, val1st_item_ofs):
-        """
-        将草图拓扑转化为区域
-        :param val1st_item_ofs:
-        :return:
-        """
-        # 获取原始的 topology
-        val2nd_ofs = val1st_item_ofs['message']['value']
-        self.sketch_topology = parse_sketch_topo(val2nd_ofs)
-
-        # 将原始的 topology 解析为区域
-        region_topo_list = self.sketch_topology['faces']
-
-        vertices_topo_dict = {}  # 将 list 转化为 key 为 id 的字典
-        for vertices_topo_item in self.sketch_topology['vertices']:
-            vertices_topo_dict[vertices_topo_item['id']] = vertices_topo_item
-
-        edges_topo_dict = {}
-        for edges_topo_item in self.sketch_topology['edges']:
-            edges_topo_dict[edges_topo_item['id']] = edges_topo_item
-
-        region_list = []
-        for region_topo_item in region_topo_list:
-            edge_id_list = region_topo_item['edges']
-            region_id = region_topo_item['id']
-
-            edge_list = []
-            for edge_id_item in edge_id_list:
-
-                edge_topo_item = edges_topo_dict[edge_id_item]
-                edge_type = edge_topo_item['param']['type']
-
-                # 将对应边解析为几何对象
-                if edge_type == 'Line':
-                    # 是直线，解析两个点
-                    edge_vert_id_list = edge_topo_item['vertices']
-                    assert len(edge_vert_id_list) == 2
-
-                    edge_point_parsed = []
-                    for edge_vert_id_item in edge_vert_id_list:
-                        vert_topo = vertices_topo_dict[edge_vert_id_item]
-
-                        vert_coor = vert_topo['param']['Vector']
-                        vert_unit = vert_topo['param']['unit']
-
-                        point_parsed = OspPoint(vert_coor[0], vert_coor[1], vert_coor[2], False)
-
-                        mul_unit = utils.get_unit_trans_coff(vert_unit, macro.GLOBAL_UNIT)
-
-                        point_parsed = mul_unit * point_parsed
-                        edge_point_parsed.append(point_parsed)
-
-                    edge_parsed = OspLine(edge_point_parsed[0], edge_point_parsed[1], False)
-
-                elif edge_type == 'Circle':
-                    # 是圆，解析圆心三维坐标、所在平面法线、半径
-
-                    # 找到坐标系
-                    coor_ofs = edge_topo_item['param']['coordSystem']
-
-                    # 获取单位
-                    origin_ofs = coor_ofs['origin']
-                    coor_unit = origin_ofs[0][1]
-                    mul_unit = utils.get_unit_trans_coff(coor_unit, macro.GLOBAL_UNIT)
-
-                    # 获取坐标系的方向，圆应该是在 xoy 平面内，原点同时也是圆心
-                    origin = OspPoint(origin_ofs[0][0], origin_ofs[1][0], origin_ofs[2][0], False)
-
-                    # 统一单位
-                    origin = mul_unit * origin
-
-                    # coor_x_ofs = coor_ofs['xAxis']
-                    # coor_x = OspPoint(coor_x_ofs[0][0], coor_x_ofs[1][0], coor_x_ofs[2][0], False)
-
-                    coor_z_ofs = coor_ofs['zAxis']
-                    coor_z = OspPoint(coor_z_ofs[0][0], coor_z_ofs[1][0], coor_z_ofs[2][0], False)
-
-                    # circle_plane = SketchPlane(origin, coor_z, coor_x, coor_unit)
-
-                    # 获取半径
-                    radius = edge_topo_item['param']['radius']
-
-                    # 统一单位
-                    radius = radius * mul_unit
-
-                    # 构造圆
-                    edge_parsed = OspCircle(origin, radius, coor_z, False)
-
-                edge_list.append(edge_parsed)
-
-            region_parsed = Region(region_id, edge_list)
-            region_list.append(region_parsed)
-
-        self.region_list = region_list
-
-
-
-
-
-
-
-
-def parse_sketch_plane_id(fea_item_ofs):
+def parse_sketch_topo_and_region(val1st_item_ofs):
     """
-    获取草图所在平面的id
-    :param fea_item_ofs:
+    将草图拓扑转化为区域
+    :param val1st_item_ofs:
     :return:
     """
-    param_list = fea_item_ofs['message']['parameters']
+    # 获取原始的 topology
+    val2nd_ofs = val1st_item_ofs['message']['value']
+    sketch_topology = parse_sketch_topo(val2nd_ofs)
 
-    sketch_plane_id = None
-    for i, param_item in enumerate(param_list):
-        param_msg = param_item['message']
-        param_id = param_msg['parameterId']
+    # 将原始的 topology 解析为区域
+    region_topo_list = sketch_topology['faces']
 
-        if param_id == 'sketchPlane' and 'queries' in param_msg:
-            sketch_plane_id = param_msg['queries'][0]['message']['geometryIds'][0]
-    return sketch_plane_id
+    vertices_topo_dict = {}  # 将 list 转化为 key 为 id 的字典
+    for vertices_topo_item in sketch_topology['vertices']:
+        vertices_topo_dict[vertices_topo_item['id']] = vertices_topo_item
 
+    edges_topo_dict = {}
+    for edges_topo_item in sketch_topology['edges']:
+        edges_topo_dict[edges_topo_item['id']] = edges_topo_item
 
-def parse_line_param(entity_item_msg_ofs):
-    """
-    从原始的信息中获取直线
-    :param entity_item_msg_ofs:
-    :return:
-    """
-    start_param = entity_item_msg_ofs['startParam']
-    end_param = entity_item_msg_ofs['endParam']
+    region_list = []
+    for region_topo_item in region_topo_list:
+        edge_id_list = region_topo_item['edges']
+        region_id = region_topo_item['id']
 
-    _entity_item_msg_geom_msg_ofs = entity_item_msg_ofs['geometry']['message']
-    loc_x = _entity_item_msg_geom_msg_ofs['pntX']
-    loc_y = _entity_item_msg_geom_msg_ofs['pntY']
-    dir_x = _entity_item_msg_geom_msg_ofs['dirX']
-    dir_y = _entity_item_msg_geom_msg_ofs['dirY']
+        edge_list = []
+        for edge_id_item in edge_id_list:
 
-    loc_line = OspPoint(loc_x, loc_y, 0, True)
-    dir_line = OspPoint(dir_x, dir_y, 0, True)
+            edge_topo_item = edges_topo_dict[edge_id_item]
+            edge_type = edge_topo_item['param']['type']
 
-    start = loc_line + start_param * dir_line
-    end = loc_line + end_param * dir_line
+            # 将对应边解析为几何对象
+            if edge_type == 'Line':
+                # 是直线，解析两个点
+                edge_vert_id_list = edge_topo_item['vertices']
+                assert len(edge_vert_id_list) == 2
 
-    return OspLine(start, end, True)
+                edge_point_parsed = []
+                for edge_vert_id_item in edge_vert_id_list:
+                    vert_topo = vertices_topo_dict[edge_vert_id_item]
 
+                    vert_coor = vert_topo['param']['Vector']
 
-def parse_circle_param(entity_item_msg_ofs):
-    """
-    从原始的信息中获取圆
-    :param entity_item_msg_ofs:
-    :return:
-    """
-    entity_item_msg_geom_msg_ofs = entity_item_msg_ofs['geometry']['message']
+                    point_parsed = OspPoint(vert_coor[0], vert_coor[1], vert_coor[2])
 
-    radius = entity_item_msg_geom_msg_ofs['radius']
-    x_cen = entity_item_msg_geom_msg_ofs['xCenter']
-    y_cen = entity_item_msg_geom_msg_ofs['yCenter']
-    center = OspPoint(x_cen, y_cen, 0, True)
+                    edge_point_parsed.append(point_parsed)
 
-    return OspCircle(center, radius, None, True)
+                edge_parsed = OspLine(edge_point_parsed[0], edge_point_parsed[1])
 
+            elif edge_type == 'Circle':
+                # 是圆，解析圆心三维坐标、所在平面法线、半径
 
-def parse_sketch_primitives(fea_item_ofs):
-    """
-    解析草图中的几何元素
-    :return:
-    """
-    entity_parsed_list = []
+                # 找到坐标系
+                coor_ofs = edge_topo_item['param']['coordSystem']
 
-    entity_ofs_list = fea_item_ofs['message']['entities']
-    for entity_item_ofs in entity_ofs_list:
+                # 获取单位
+                origin_ofs = coor_ofs['origin']
 
-        entity_item_msg_ofs = entity_item_ofs['message']
-        entity_type = entity_item_msg_ofs['geometry']['typeName']
-        entity_parsed = None
+                # 获取坐标系的方向，圆应该是在 xoy 平面内，原点同时也是圆心
+                origin = OspPoint(origin_ofs[0][0], origin_ofs[1][0], origin_ofs[2][0])
 
-        if entity_type == 'BTCurveGeometryLine':
-            entity_parsed = parse_line_param(entity_item_msg_ofs)
+                coor_z_ofs = coor_ofs['zAxis']
+                coor_z = OspPoint(coor_z_ofs[0][0], coor_z_ofs[1][0], coor_z_ofs[2][0])
 
-        elif entity_type == 'BTCurveGeometryCircle':
-            entity_parsed = parse_circle_param(entity_item_msg_ofs)
+                # 获取半径
+                radius = edge_topo_item['param']['radius']
 
-        entity_parsed_list.append(entity_parsed)
+                # 构造圆
+                edge_parsed = OspCircle(origin, radius, coor_z)
 
-    return entity_parsed_list
+            edge_list.append(edge_parsed)
 
+        region_parsed = Region(region_id, edge_list)
+        region_list.append(region_parsed)
 
-def parse_multi_sketch_topo(topo_ofs):
-    """
-    解析全部的草图拓扑
-    :param topo_ofs:
-    :return:
-    """
-    res_msg_val_ofs = topo_ofs['result']['message']['value']
-
-    all_sketch_topo = []
-    for topo_item_ofs in res_msg_val_ofs:
-        val2nd_ofs = topo_item_ofs['message']['value']
-
-        sketch_topo_parsed = parse_sketch_topo(val2nd_ofs)
-        all_sketch_topo.append(sketch_topo_parsed)
-
-    return all_sketch_topo
+    return sketch_topology, region_list
 
 
 def parse_sketch_topo(val2nd_ofs):
     topo = {}
     for val2nd_item_ofs in val2nd_ofs:
-        val2nd_item_type = val2nd_item_ofs['message']['key']['message']['value']  # ['faces, 'edges']
+        val2nd_item_type = val2nd_item_ofs['message']['key']['message']['value']  # ['faces, 'edges', 'vertices']
         val4th_ofs = val2nd_item_ofs['message']['value']['message']['value']
         outer_list = []
 
         for val4th_item_ofs in val4th_ofs:
+            # val4th_ofs: 每个元素代表 face、edge、vert 的一个元素
             val5th_ofs = val4th_item_ofs['message']['value']
             geo_dict = {}
 
             for val5th_item_ofs in val5th_ofs:
+                # val5th_ofs: 每个元素代表 face、edge、vert 的一个具体属性，例如 id，坐标系等
                 elem_type = val5th_item_ofs['message']['key']['message']['value']  # ['id', edges/vertices]
                 val6th_ofs = val5th_item_ofs['message']['value']
 
                 if elem_type == 'param':
                     if val2nd_item_type == 'faces':
-                        v = parse_face_msg(val6th_ofs)[0]
+                        v = parse_face_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'edges':
-                        v = parse_edge_msg(val6th_ofs)[0]
+                        v = parse_edge_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'vertices':
-                        v = parse_vertex_msg(val6th_ofs)[0]
+                        v = parse_vertex_msg(val6th_ofs)
 
                     else:
                         raise NotImplementedError
 
-                elif isinstance(val6th_ofs['message']['value'], list):
-                    v = [a['message']['value'] for a in val6th_ofs['message']['value']]
+                elif elem_type in ('vertices', 'edges'):
+                    v = parse_last_id(val6th_ofs['message']['value'])
+
+                elif elem_type == 'id':
+                    v = val6th_ofs['message']['value']
 
                 else:
+                    warn(f'not considered key occurred: {elem_type}, parsed as [message][value]')
                     v = val6th_ofs['message']['value']
 
                 geo_dict[elem_type] = v
@@ -295,113 +155,169 @@ def parse_sketch_topo(val2nd_ofs):
     return topo
 
 
-def parse_face_msg(response):
+def parse_face_msg(val6th_ofs):
     """
     parse face parameters from OnShape response data
     """
-    # data = response.json()['result']['message']['value']
-    data = [response] if not isinstance(response, list) else response
-    faces = []
+    face_msg = val6th_ofs['message']['value']
+    face_param = {'typeTag': val6th_ofs['message']['typeTag']}
 
-    for item in data:
-        face_msg = item['message']['value']
-        face_type = item['message']['typeTag']
-        face_param = {'type': face_type}
+    for msg in face_msg:
+        k = msg['message']['key']['message']['value']
+        v_item = msg['message']['value']['message']['value']
 
-        for msg in face_msg:
-            k = msg['message']['key']['message']['value']
-            v_item = msg['message']['value']['message']['value']
-            if k == 'coordSystem':
-                v = parse_coord_msg(v_item)
+        if k == 'coordSystem':
+            v = parse_coord_msg(v_item)
 
-            elif isinstance(v_item, list):
-                v = [round(x['message']['value'], 8) for x in v_item]
+        elif k in ('normal', 'origin', 'x'):
+            v = parse_last_msg_val_list(v_item)
 
-            else:
-                if isinstance(v_item, float):
-                    v = round(v_item, 8)
+        elif k in ('surfaceType', ):
+            v = v_item
 
-                else:
-                    v = v_item
+        else:
+            warn(f'not considered key occurred: {k}, save directly')
+            v = v_item
 
-            face_param[k] = v
-        faces.append(face_param)
-    return faces
+        face_param[k] = v
+
+    return face_param
 
 
 def parse_coord_msg(response):
-    """parse coordSystem parameters from OnShape response data"""
+    """
+    parse coordSystem parameters from OnShape response data
+    """
     coord_param = {}
     for item in response:
         k = item['message']['key']['message']['value']
 
         v_msg = item['message']['value']['message']['value']
 
-        v = []
-        for final_item in v_msg:
-            c_val = final_item['message']['value']
+        if k in ('origin', 'xAxis', 'zAxis'):
+            v = parse_last_msg_val_list(v_msg)
 
-            unit = None
-            if 'unitToPower' in final_item['message']:
-                init_ofs = final_item['message']['unitToPower'][0]
-                unit = (init_ofs['key'], init_ofs['value'])
-
-            c_val_with_unit = (c_val, unit)
-            v.append(c_val_with_unit)
+        else:
+            warn(f'not considered key occurred: {k}, parsed as origin')
+            v = parse_last_msg_val_list(v_msg)
 
         coord_param[k] = v
     return coord_param
 
 
-def parse_edge_msg(response):
+def parse_edge_msg(val6th_ofs):
     """
     parse edge parameters from OnShape response data
     """
-    data = [response] if not isinstance(response, list) else response
+    assert isinstance(val6th_ofs, dict)
 
-    edges = []
-    for item in data:
-        edge_msg = item['message']['value']
-        edge_type = item['message']['typeTag']  # ['Circle', 'Line']
-        edge_param = {'type': edge_type}
+    edge_msg = val6th_ofs['message']['value']
+    edge_param = {'typeTag': val6th_ofs['message']['typeTag']}  # ['Circle', 'Line']
 
-        for msg in edge_msg:
-            k = msg['message']['key']['message']['value']  # 'coordSystem'
-            v_item = msg['message']['value']['message']['value']
+    for msg in edge_msg:
+        k = msg['message']['key']['message']['value']  # 'coordSystem'
+        v_ofs = msg['message']['value']['message']['value']
 
-            if k == 'coordSystem':
-                v = parse_coord_msg(v_item)
+        if k == 'curveType':
+            v = v_ofs
 
-            elif isinstance(v_item, list):
-                v = [round(x['message']['value'], 8) for x in v_item]
+        elif k in ('direction', 'origin', 'knots', 'weights'):
+            v = parse_last_msg_val_list(v_ofs)
 
+        elif k == 'coordSystem':
+            v = parse_coord_msg(v_ofs)
+
+        elif k in ('radius', 'degree', 'dimension', 'isPeriodic', 'isRational', 'majorRadius', 'minorRadius'):
+            v = parse_last_msg_val(msg['message']['value'])
+
+        elif k == 'controlPoints':
+            v = parse_past_last_msg_val_list(v_ofs)
+
+
+
+
+
+        elif isinstance(v_ofs, list):
+            v = [round(x['message']['value'], 8) for x in v_ofs]
+
+        else:
+            if isinstance(v_ofs, float):
+                v = round(v_ofs, 8)
             else:
-                if isinstance(v_item, float):
-                    v = round(v_item, 8)
-                else:
-                    v = v_item
+                v = v_ofs
 
-            edge_param.update({k: v})
-        edges.append(edge_param)
-    return edges
+        edge_param[k] = v
+
+    return edge_param
 
 
-def parse_vertex_msg(response):
-    """parse vertex parameters from OnShape response data"""
-    data = [response] if not isinstance(response, list) else response
-    vertices = []
+def parse_last_msg_val_list(last_msg_val_list_ofs):
+    """
+    解析最深的仅需['message']['value']即可获取值的数组
+    """
+    assert isinstance(last_msg_val_list_ofs, list)
 
-    for item in data:
-        xyz_msg = item['message']['value']
-        xyz_type = item['message']['typeTag']
-        p = []
+    val_parsed_list = []
+    for item in last_msg_val_list_ofs:
+        val_parsed = parse_last_msg_val(item)
+        val_parsed_list.append(val_parsed)
 
-        for msg in xyz_msg:
-            p.append(round(msg['message']['value'], 8))
+    return val_parsed_list
 
-        unit = xyz_msg[0]['message']['unitToPower'][0]
-        unit_exp = (unit['key'], unit['value'])
-        vertices.append({xyz_type: tuple(p), 'unit': unit_exp})
+
+def parse_last_msg_val(last_value_ofs):
+    """
+    解析最深的仅需['message']['value']即可获取值的字典
+    """
+    val_parsed = last_value_ofs['message']['value']
+
+    # 如果该值有单位
+    if 'unitToPower' in last_value_ofs['message']:
+        unit = last_value_ofs['message']['unitToPower']
+        assert len(unit) == 1
+        unit = unit[0]
+
+        # 获取单位
+        mul_unit = utils.get_unit_trans_coff((unit['key'], unit['value']), macro.GLOBAL_UNIT)
+
+        # 进行单位转换
+        val_parsed *= mul_unit
+
+    return val_parsed
+
+def parse_last_id(last_msg_val_list_ofs):
+    """
+    解析最深的仅需['message']['value']即可获取 id 的数组
+    """
+    assert isinstance(last_msg_val_list_ofs, list)
+
+    id_parsed_list = []
+    for item in last_msg_val_list_ofs:
+        id_parsed = item['message']['value']
+        id_parsed_list.append(id_parsed)
+
+    return id_parsed_list
+
+
+def parse_past_last_msg_val_list(past_last_msg_val_list):
+    """
+    解析二重列表，最深一层可能是点坐标
+    """
+    assert isinstance(past_last_msg_val_list, list)
+    val_parsed_list = []
+    for item in past_last_msg_val_list:
+        parsed_item = parse_last_msg_val_list(item['message']['value'])
+        val_parsed_list.append(parsed_item)
+
+    return val_parsed_list
+
+
+def parse_vertex_msg(val6th_ofs):
+    """
+    parse vertex parameters from OnShape response data
+    """
+    assert isinstance(val6th_ofs, dict)
+    vertices = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
     return vertices
 

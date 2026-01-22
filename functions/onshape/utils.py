@@ -14,10 +14,10 @@ def get_unit_trans_coff(unit, trans_to):
         return mul_unit
 
     elif unit[0] == 'METER' and trans_to == 'in':
-        return mul_unit * macro.METER_TO_IN
+        return  macro.METER_TO_IN ** mul_unit
 
     elif unit[0] == 'in' and trans_to == 'METER':
-        return mul_unit * macro.IN_TO_METER
+        return  macro.IN_TO_METER ** mul_unit
 
     else:
         raise NotImplementedError
