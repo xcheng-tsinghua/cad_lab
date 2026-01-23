@@ -601,8 +601,8 @@ def get_default_plane_id():
 
 
 def test_onshape_parser():
-    # onshape_seq_parser.parse_onshape_topology()
-    onshape_seq_parser.test_parse_sketch()
+    onshape_seq_parser.parse_onshape_topology()
+    # onshape_seq_parser.test_parse_sketch()
     # from functions.onshape import onshape_seq_parser_old as od
     # od.test()
 

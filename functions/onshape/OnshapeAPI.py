@@ -161,8 +161,6 @@ class OnshapeAPI(object):
         Returns:
             - requests.Response: Object containing the response from Onshape
         """
-        # time.sleep(1.0)  # 防止因请求过快导致请求失败
-
         req_headers = self._make_headers(method, path, query, headers)
         if base_url is None:
             base_url = self._url

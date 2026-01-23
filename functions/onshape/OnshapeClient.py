@@ -116,7 +116,7 @@ class Client(object):
 
         return self._api.request('post', '/api/assemblies/d/' + did + '/w/' + wid, body=payload)
 
-    def get_features(self, did, wid, eid):
+    def request_features(self, did, wid, eid):
         """
         Gets the feature list for specified document / workspace / part studio.
 
@@ -450,7 +450,7 @@ class OnshapeClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         return res.json()
 
-    def eval_multi_fea_topology(self, did, wid, eid, fea_id_list):
+    def request_multi_feat_topology(self, did, wid, eid, fea_id_list):
         """
         通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
 
@@ -472,18 +472,19 @@ class OnshapeClient(Client):
                 "   for (var l = 0; l < size(q_arr); l+= 1){"
                 "       var topo = {};"
                 "       topo.regions = [];"
+                "       topo.faces = [];"
                 "       topo.edges = [];"
                 "       topo.vertices = [];"
 
-                "       /* ---------- 1. Faces (regions only) ---------- */"  # 区域列表，每个区域仅包含：区域的定义、区域id、该区域下的边id
-                "       var q_face = qSketchRegion(makeId(q_arr[l]));"
-                "       var face_arr = evaluateQuery(context, q_face);"
-                "       for (var i = 0; i < size(face_arr); i += 1) {"
+                "       /* ---------- 1. Regions (regions only) ---------- */"  # 区域列表，每个区域仅包含：区域的定义、区域id、该区域下的边id
+                "       var q_region = qSketchRegion(makeId(q_arr[l]));"
+                "       var region_arr = evaluateQuery(context, q_region);"
+                "       for (var i = 0; i < size(region_arr); i += 1) {"
                 "           var region_topo = {};"
-                "           region_topo.id = transientQueriesToStrings(face_arr[i]);"  # 区域id
+                "           region_topo.id = transientQueriesToStrings(region_arr[i]);"  # 区域id
                 "           region_topo.edges = [];"  # 该区域下的边id
-                "           region_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});"  # 区域的定义
-                "           var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);"
+                "           region_topo.param = evSurfaceDefinition(context, {face: region_arr[i]});"  # 区域的定义
+                "           var q_edge = qAdjacent(region_arr[i], AdjacencyType.EDGE, EntityType.EDGE);"
                 "           var edge_arr = evaluateQuery(context, q_edge);"
                 "           for (var j = 0; j < size(edge_arr); j += 1) {"
                 "               const edge_id = transientQueriesToStrings(edge_arr[j]);"
@@ -491,8 +492,25 @@ class OnshapeClient(Client):
                 "           }"
                 "           topo.regions = append(topo.regions, region_topo);"
                 "       }"
+                                   
+                # "      /* ---------- 2. Face (ALL faces generated) ---------- */"  # 面列表，每个面仅包含：面的定义、面id、该面下的边id。但实测加不加面没区别
+                # "       var q_face = qCreatedBy(makeId(q_arr[l]), EntityType.FACE);"
+                # "       var face_arr = evaluateQuery(context, q_face);"
+                # "       for (var i = 0; i < size(face_arr); i += 1) {"
+                # "           var face_topo = {};"
+                # "           face_topo.id = transientQueriesToStrings(face_arr[i]);"  # 面id
+                # "           face_topo.edges = [];"  # 该面下的边id
+                # "           face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});"  # 面的定义
+                # "           var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);"
+                # "           var edge_arr = evaluateQuery(context, q_edge);"
+                # "           for (var j = 0; j < size(edge_arr); j += 1) {"
+                # "               const edge_id = transientQueriesToStrings(edge_arr[j]);"
+                # "               face_topo.edges = append(face_topo.edges, edge_id);"
+                # "           }"
+                # "           topo.faces = append(topo.faces, face_topo);"
+                # "       }"
                                                                                         
-                "      /* ---------- 2. Edges (ALL sketch edges, open or closed) ---------- */"  # 边列表，每个边仅包含：边的定义、边的id、该边下的端点id
+                "      /* ---------- 3. Edges (ALL sketch edges, open or closed) ---------- */"  # 边列表，每个边仅包含：边的定义、边的id、该边下的端点id
                 "      var q_edge = qCreatedBy(makeId(q_arr[l]), EntityType.EDGE);"
                 "      var edge_arr = evaluateQuery(context, q_edge);"
                 "      for (var j = 0; j < size(edge_arr); j += 1) {"
@@ -510,7 +528,7 @@ class OnshapeClient(Client):
                 "          topo.edges = append(topo.edges, edge_topo);"                                                           
                 "      }"
                                                                                         
-                "       /* ---------- 3. Vertices (ALL sketch vertices) ---------- */"  # 点列表，每个点仅包含：点的定义、点的id
+                "       /* ---------- 4. Vertices (ALL sketch vertices) ---------- */"  # 点列表，每个点仅包含：点的定义、点的id
                 "      var q_vertex = qCreatedBy(makeId(q_arr[l]), EntityType.VERTEX);"
                 "      var vertex_arr = evaluateQuery(context, q_vertex);"
                 "      for (var k = 0; k < size(vertex_arr); k += 1) {"
@@ -520,7 +538,7 @@ class OnshapeClient(Client):
                 "          vertex_topo.param = evVertexPoint(context, {vertex: vertex_arr[k]});"  # 点的定义
                 "          topo.vertices = append(topo.vertices, vertex_topo);"
                 "      }"
-                "      res_list = append(res_list, topo)"
+                "      res_list = append(res_list, topo);"
                 "   }"
                 "   return res_list;"
                 "}",
