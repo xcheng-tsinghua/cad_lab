@@ -180,7 +180,7 @@ def parse_onshape_topology(is_load_ofs_and_topo=False):
     # 获取绘图元素：
     all_plots = []
     for sketch in all_sketch_parsed:
-        for region in sketch.region_list:
+        for _, region in sketch.region_dict.items():
             for prim in region.primitive_list:
                 sample_list = prim.sample()
                 all_plots.append(point_list_to_numpy(sample_list))
