@@ -15,12 +15,27 @@ OSP: onshape sequence parser 简写
 """
 import os
 import json
-from datetime import datetime
 from functions.onshape.OnshapeClient import OnshapeClient
 from functions.onshape.SketchParser import Sketch
-from functions.onshape import SketchParser
 import matplotlib.pyplot as plt
 from functions.onshape import macro
+from functions.onshape.OspGeomBase import OspPoint
+import numpy as np
+from datetime import datetime
+
+
+def point_list_to_numpy(osp_point_list: list[OspPoint]):
+    """
+    将一个包含 n 个点的列表转换为 [n * 3] 的 numpy 数组
+    :param osp_point_list:
+    :return:
+    """
+    np_list = []
+    for c_osp in osp_point_list:
+        np_list.append(c_osp.to_numpy())
+
+    np_list = np.vstack(np_list)
+    return np_list
 
 
 def plot_3d_sketch(sample_list):
@@ -63,6 +78,20 @@ def request_sketch_plane(skh_parser_list, save_path, model_url):
     return res.json()
 
 
+def request_model_ofs(client, model_url):
+    """
+    从服务器请求原始特征列表
+    :param client:
+    :param model_url:
+    :return:
+    """
+    v_list = model_url.split("/")
+    did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+    orig_ofs = client.get_features(did, wid, eid).json()
+    return orig_ofs
+
+
 def request_sketch_topology(all_sketch_id, model_url):
     """
     批量获取草图中的全部区域信息
@@ -79,6 +108,34 @@ def request_sketch_topology(all_sketch_id, model_url):
     return res
 
 
+def parse_onshape_topology(is_load_ofs_and_topo=False):
+    """
+    解析全部草图和建模操作的拓扑
+    :return:
+    """
+    onshape_client = OnshapeClient()
+    model_url = macro.URL
+    save_root = macro.SAVE_ROOT
+
+    ofs_path = os.path.join(save_root, 'orig_ofs.json')
+
+    if is_load_ofs_and_topo:
+        print('从文件加载原始特征列表')
+        with open(ofs_path, 'r') as f:
+            ofs = json.load(f)
+
+    else:
+        print('从服务器请求原始特征列表')
+        ofs = request_model_ofs(onshape_client, model_url)
+
+        with open(ofs_path, 'w') as f:
+            json.dump(ofs, f, ensure_ascii=False, indent=4)
+
+    #########################
+
+
+
+
 def test_parse_sketch():
 
     ofs_path = os.path.join(macro.SAVE_ROOT, 'orig_ofs.json')
@@ -86,22 +143,27 @@ def test_parse_sketch():
         ofs = json.load(f)
 
     all_sketch_id = []
+    all_operation_id = []
     for i, fea_item_ofs in enumerate(ofs['features']):
         feat_type = fea_item_ofs['message']['featureType']
 
         if feat_type == 'newSketch':
             all_sketch_id.append(fea_item_ofs['message']['featureId'])
 
-    # 请求服务器一次获取所有草图区域拓扑信息
-    # all_sketch_topo = request_sketch_topology(all_sketch_id, macro.URL)
+        elif feat_type in ('extrude', 'revolve', 'loft', 'sweep', '倒角、圆角、线性阵列、圆周阵列？'):
+            all_operation_id.append(fea_item_ofs['message']['featureId'])
+
+    # 请求服务器一次获取所有草图区域拓扑信息以及操作的拓扑信息
+    # all_sketch_topo = request_sketch_topology(all_sketch_id + all_operation_id, macro.URL)
     # timestamp = datetime.now().strftime('%H_%M_%S')
-    # target_path = os.path.join(macro.SAVE_ROOT, f'all_sketch_topo_{timestamp}.json')
+    # target_path = os.path.join(macro.SAVE_ROOT, f'all_sketch_ops_topo_{timestamp}.json')
     # with open(target_path, 'w') as f:
     #     json.dump(all_sketch_topo, f, ensure_ascii=False, indent=4)
-    # print('save all sketch topo succeed!')
+    # print('save all sketch and operation topo succeed!')
+    # exit('asasadasdaaa')
 
     # 解析全部草图参数
-    all_topo_file = os.path.join(macro.SAVE_ROOT, 'all_sketch_topo_20_16_58.json')
+    all_topo_file = os.path.join(macro.SAVE_ROOT, 'all_ops_topo_13_16_29.json')
     with open(all_topo_file, 'r') as f:
         all_sketch_topo = json.load(f)
 
@@ -118,7 +180,8 @@ def test_parse_sketch():
     for sketch in all_sketch_parsed:
         for region in sketch.region_list:
             for prim in region.primitive_list:
-                all_plots.append(prim.sample())
+                sample_list = prim.sample()
+                all_plots.append(point_list_to_numpy(sample_list))
 
     # 绘图
     plot_3d_sketch(all_plots)

@@ -13,6 +13,9 @@ class OspPoint(object):
         self.y = y
         self.z = z
 
+        # 给角点用的 id
+        # self.id = None
+
     def __add__(self, other):
         assert isinstance(other, OspPoint), TypeError("add requires another OspPoint")
         return OspPoint(self.x + other.x,
@@ -142,11 +145,16 @@ class OspPoint(object):
     def to_numpy(self):
         return np.array([self.x, self.y, self.z], dtype=np.float64)
 
-    @staticmethod
-    def from_numpy(arr):
+    @classmethod
+    def from_numpy(cls, arr):
         arr = np.asarray(arr)
         assert arr.shape == (3,)
-        return OspPoint(arr[0].item(), arr[1].item(), arr[2].item())
+        return cls(arr[0].item(), arr[1].item(), arr[2].item())
+
+    @classmethod
+    def from_list(cls, coor_list):
+        assert len(coor_list) == 3
+        return cls(coor_list[0], coor_list[1], coor_list[2])
 
     def to_tuple(self):
         return self.x, self.y, self.z
@@ -164,4 +172,33 @@ class OspPoint(object):
             abs(self.y - other.y) < tol and
             abs(self.z - other.z) < tol
         )
+
+
+class OspCoordSystem(object):
+    """
+    表示空间中的坐标系
+    """
+    def __init__(self,
+                 origin: OspPoint,
+                 z_axis: OspPoint,
+                 x_axis: OspPoint
+                 ):
+
+        self.origin = origin
+        self.z_axis = z_axis
+        self.x_axis = x_axis
+
+    @classmethod
+    def from_parsed_ofs(cls, parsed_ofs):
+        """
+        从解析特征列表获得的拓扑信息中的坐标系字典来初始化坐标系
+        :param parsed_ofs:
+        :return:
+        """
+        origin = OspPoint.from_list(parsed_ofs['origin'])
+        z_axis = OspPoint.from_list(parsed_ofs['zAxis'])
+        x_axis = OspPoint.from_list(parsed_ofs['xAxis'])
+
+        return cls(origin, z_axis, x_axis)
+
 

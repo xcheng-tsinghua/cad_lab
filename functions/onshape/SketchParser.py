@@ -1,12 +1,10 @@
 """
-目前解析时，
-
-
+目前解析时
 
 """
 
-from functions.onshape.OspPoint import OspPoint
-from functions.onshape.OspGeom import OspLine, OspCircle
+from functions.onshape.OspGeomBase import OspPoint, OspCoordSystem
+from functions.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline
 from functions.onshape import utils, macro
 from warnings import warn
 
@@ -15,8 +13,8 @@ class Region(object):
     """
     一个草图可能存在多个区域，拉伸、旋转等都是选中区域进行操作
     """
-    def __init__(self, region_id, primitive_list):
-        self.region_id = region_id
+    def __init__(self, primitive_list: list, topo_id: str):
+        self.id = topo_id
         self.primitive_list = primitive_list
 
 
@@ -25,86 +23,145 @@ class Sketch(object):
     包含草图中全部区域及其几何元素
     """
     def __init__(self, val1st_item_ofs):
-        # 草图的区域：拉伸、旋转等都是用的区域，而非草图
-        self.sketch_topology, self.region_list = parse_sketch_topo_and_region(val1st_item_ofs)
+        # 原始解析出的拓扑结构
+        self.sketch_topology = parse_sketch_topo(val1st_item_ofs['message']['value'])
 
-def parse_sketch_topo_and_region(val1st_item_ofs):
+        # 草图的区域：拉伸、旋转等都是用的区域，而非草图
+        self.region_list = parse_sketch_region(self.sketch_topology)
+
+
+def parse_sketch_region(sketch_topology):
     """
     将草图拓扑转化为区域
-    :param val1st_item_ofs:
+    :param sketch_topology:
     :return:
     """
-    # 获取原始的 topology
-    val2nd_ofs = val1st_item_ofs['message']['value']
-    sketch_topology = parse_sketch_topo(val2nd_ofs)
+    # 将 list 转化为 key 为 id 的字典，便于查询
+    edges_topo_dict = {item['id']: item for item in sketch_topology['edges']}
+
+    # 将 list 转化为 key 为 id 的字典，便于查询
+    vertices_topo_dict = {item['id']: item['param'] for item in sketch_topology['vertices']}
 
     # 将原始的 topology 解析为区域
-    region_topo_list = sketch_topology['faces']
-
-    vertices_topo_dict = {}  # 将 list 转化为 key 为 id 的字典
-    for vertices_topo_item in sketch_topology['vertices']:
-        vertices_topo_dict[vertices_topo_item['id']] = vertices_topo_item
-
-    edges_topo_dict = {}
-    for edges_topo_item in sketch_topology['edges']:
-        edges_topo_dict[edges_topo_item['id']] = edges_topo_item
-
     region_list = []
-    for region_topo_item in region_topo_list:
-        edge_id_list = region_topo_item['edges']
-        region_id = region_topo_item['id']
+    for region_topo_item in sketch_topology['faces']:
 
-        edge_list = []
-        for edge_id_item in edge_id_list:
+        region_edge_list = parse_edges_by_id(region_topo_item['edges'], edges_topo_dict, vertices_topo_dict)
+        region_parsed = Region(region_edge_list, region_topo_item['id'])
 
-            edge_topo_item = edges_topo_dict[edge_id_item]
-            edge_type = edge_topo_item['param']['type']
-
-            # 将对应边解析为几何对象
-            if edge_type == 'Line':
-                # 是直线，解析两个点
-                edge_vert_id_list = edge_topo_item['vertices']
-                assert len(edge_vert_id_list) == 2
-
-                edge_point_parsed = []
-                for edge_vert_id_item in edge_vert_id_list:
-                    vert_topo = vertices_topo_dict[edge_vert_id_item]
-
-                    vert_coor = vert_topo['param']['Vector']
-
-                    point_parsed = OspPoint(vert_coor[0], vert_coor[1], vert_coor[2])
-
-                    edge_point_parsed.append(point_parsed)
-
-                edge_parsed = OspLine(edge_point_parsed[0], edge_point_parsed[1])
-
-            elif edge_type == 'Circle':
-                # 是圆，解析圆心三维坐标、所在平面法线、半径
-
-                # 找到坐标系
-                coor_ofs = edge_topo_item['param']['coordSystem']
-
-                # 获取单位
-                origin_ofs = coor_ofs['origin']
-
-                # 获取坐标系的方向，圆应该是在 xoy 平面内，原点同时也是圆心
-                origin = OspPoint(origin_ofs[0][0], origin_ofs[1][0], origin_ofs[2][0])
-
-                coor_z_ofs = coor_ofs['zAxis']
-                coor_z = OspPoint(coor_z_ofs[0][0], coor_z_ofs[1][0], coor_z_ofs[2][0])
-
-                # 获取半径
-                radius = edge_topo_item['param']['radius']
-
-                # 构造圆
-                edge_parsed = OspCircle(origin, radius, coor_z)
-
-            edge_list.append(edge_parsed)
-
-        region_parsed = Region(region_id, edge_list)
         region_list.append(region_parsed)
 
-    return sketch_topology, region_list
+    return region_list
+
+
+def parse_edges_by_id(edge_id_list, edges_topo_dict, vertices_topo_dict):
+    """
+    将 edge id 列表解析具体的 edge 对象
+    :param edge_id_list:
+    :param edges_topo_dict:
+    :param vertices_topo_dict:
+    :return:
+    """
+    edge_list = []
+    for edge_id_item in edge_id_list:
+        edge_topo_item = edges_topo_dict[edge_id_item]
+        edge_type = edge_topo_item['param']['curveType']
+
+        # 将对应边解析为几何对象
+        if edge_type == 'LINE':
+            # 是直线，解析两个点
+            edge_points_parsed = parse_edge_end_points_by_id(edge_topo_item['vertices'], vertices_topo_dict)
+            edge_parsed = OspLine(edge_points_parsed[0], edge_points_parsed[1], edge_id_item)
+
+        elif edge_type == 'CIRCLE':
+            # 是圆，解析圆心三维坐标、所在平面法线、半径、始末点
+
+            # 找到所在的局部坐标系
+            coord_sys = OspCoordSystem.from_parsed_ofs(edge_topo_item['param']['coordSystem'])
+
+            # 获取半径
+            radius = edge_topo_item['param']['radius']
+
+            # 获取端点
+            vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vertices_topo_dict)
+
+            # 构造圆
+            edge_parsed = OspCircle(coord_sys, radius, vertices[0], vertices[1], edge_id_item)
+
+        elif edge_type == 'ELLIPSE':
+            # 找到所在的局部坐标系
+            coord_sys = OspCoordSystem.from_parsed_ofs(edge_topo_item['param']['coordSystem'])
+
+            # 获取半长轴 majorRadius
+            major_radius = edge_topo_item['param']['majorRadius']
+
+            # 获取短长轴 minorRadius
+            minor_radius = edge_topo_item['param']['minorRadius']
+
+            # 获取端点
+            vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vertices_topo_dict)
+
+            # 构造椭圆
+            edge_parsed = OspEllipse(coord_sys, major_radius, minor_radius, vertices[0], vertices[1], edge_id_item)
+
+        elif edge_type == 'SPLINE':
+            # 获取控制点坐标
+            ctrl_points_raw = edge_topo_item['param']['controlPoints']  # 二重数组，表示一系列点
+            ctrl_points = [OspPoint.from_list(point_coord) for point_coord in ctrl_points_raw]
+
+            # 获取次数
+            degree = round(edge_topo_item['param']['degree'])
+
+            # 获取 dimension
+            dimension = round(edge_topo_item['param']['dimension'])
+
+            # 获取 isPeriodic
+            is_periodic = edge_topo_item['param']['isPeriodic']
+
+            # 获取 isRational
+            is_rational = edge_topo_item['param']['isRational']
+
+            # 获取 knots
+            knots = edge_topo_item['param']['knots']
+
+            # 获取 weights
+            weights = edge_topo_item['param']['weights'] if is_rational else None
+
+            # 获取端点
+            vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vertices_topo_dict)
+
+            # 构造自由曲线
+            edge_parsed = OspBSpline(ctrl_points, degree, dimension, is_periodic, is_rational, knots, weights, vertices[0], vertices[1], edge_id_item)
+
+        else:
+            raise NotImplementedError(f'unsupported edge type: {edge_type}')
+
+        edge_list.append(edge_parsed)
+
+    return edge_list
+
+
+def parse_edge_end_points_by_id(point_id_list: list[str], vertices_topo_dict: dict):
+    """
+    将边的端点 point id 列表解析具体的 point 对象
+    :param point_id_list:
+    :param vertices_topo_dict:
+    :return:
+    """
+    point_list = []
+    if len(point_id_list) == 0:
+        point_list = (None, None)
+
+    else:
+
+        for item in point_id_list:
+            vert_coord = vertices_topo_dict[item]
+
+            point_parsed = OspPoint.from_list(vert_coord)
+            point_list.append(point_parsed)
+
+    assert len(point_list) == 2
+    return point_list
 
 
 def parse_sketch_topo(val2nd_ofs):
@@ -256,6 +313,19 @@ def parse_last_msg_val_list(last_msg_val_list_ofs):
     return val_parsed_list
 
 
+def parse_past_last_msg_val_list(past_last_msg_val_list):
+    """
+    解析二重列表，最深一层可能是点坐标
+    """
+    assert isinstance(past_last_msg_val_list, list)
+    val_parsed_list = []
+    for item in past_last_msg_val_list:
+        parsed_item = parse_last_msg_val_list(item['message']['value'])
+        val_parsed_list.append(parsed_item)
+
+    return val_parsed_list
+
+
 def parse_last_msg_val(last_value_ofs):
     """
     解析最深的仅需['message']['value']即可获取值的字典
@@ -288,19 +358,6 @@ def parse_last_id(last_msg_val_list_ofs):
         id_parsed_list.append(id_parsed)
 
     return id_parsed_list
-
-
-def parse_past_last_msg_val_list(past_last_msg_val_list):
-    """
-    解析二重列表，最深一层可能是点坐标
-    """
-    assert isinstance(past_last_msg_val_list, list)
-    val_parsed_list = []
-    for item in past_last_msg_val_list:
-        parsed_item = parse_last_msg_val_list(item['message']['value'])
-        val_parsed_list.append(parsed_item)
-
-    return val_parsed_list
 
 
 def parse_vertex_msg(val6th_ofs):
