@@ -472,7 +472,7 @@ class OnshapeClient(Client):
                 "   for (var l = 0; l < size(q_arr); l+= 1){"
                 "       var topo = {};"
                 "       topo.regions = [];"
-                "       topo.faces = [];"
+                # "       topo.faces = [];"
                 "       topo.edges = [];"
                 "       topo.vertices = [];"
 

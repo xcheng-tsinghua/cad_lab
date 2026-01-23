@@ -1,3 +1,4 @@
+import os
 
 # 米换算到英寸需要乘的系数
 METER_TO_IN = 39.3701
@@ -18,4 +19,5 @@ SAVE_ROOT = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\more_diverse_v1'
 # URL = 'https://cad.onshape.com/documents/f1c9542b7e95a9d78ba55c0f/w/76dded0e20d753ae1236e323/e/aa5f575d45eb5319e4f39885'  # test_multi_sketch_prim
 URL = 'https://cad.onshape.com/documents/bb6a98692284898a7fc69158/w/66bec0414acff16f65edeb74/e/5e43133f5eee3b516a1b8941'  # more_diverse_v1
 
+os.makedirs(SAVE_ROOT, exist_ok=True)
 

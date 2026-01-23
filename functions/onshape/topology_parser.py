@@ -256,7 +256,7 @@ def parse_feat_topo(val2nd_ofs):
                 val6th_ofs = val5th_item_ofs['message']['value']
 
                 if elem_type == 'param':
-                    if val2nd_item_type in ('regions', 'faces'):
+                    if val2nd_item_type == 'regions':
                         v = parse_region_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'edges':

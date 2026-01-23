@@ -92,7 +92,8 @@ def request_multi_feat_topology(
 
 def parse_onshape_topology(
         model_url: str = macro.URL,
-        is_load_ofs_and_topo: bool = True,
+        is_load_ofs: bool = True,
+        is_load_topo: bool = True,
         save_root: str = macro.SAVE_ROOT
 ):
     """
@@ -102,12 +103,12 @@ def parse_onshape_topology(
     onshape_client = OnshapeClient()
 
     ofs_path = os.path.join(save_root, 'orig_ofs.json')
-    if is_load_ofs_and_topo:
+    if is_load_ofs:
         print('从文件加载原始特征列表')
         with open(ofs_path, 'r') as f:
             ofs = json.load(f)
     else:
-        print('从服务器请求原始特征列表')
+        print('从 onshape 请求原始特征列表')
         ofs = request_model_ofs(onshape_client, model_url)
 
         print('保存原始特征列表')
@@ -125,11 +126,12 @@ def parse_onshape_topology(
 
     # 获取全部的草图和建模操作产生的实体的 topology
     topo_path = os.path.join(save_root, 'sketch_operation_topo.json')
-    if is_load_ofs_and_topo:
+    if is_load_topo:
         print('从文件加载原始拓扑列表')
         with open(topo_path, 'r') as f:
             sketch_operation_topo = json.load(f)
     else:
+        print('从 onshape 请求原始拓扑列表')
         sketch_operation_topo = request_multi_feat_topology(onshape_client, model_url, all_feat_id)
 
         print('保存原始拓扑列表')
