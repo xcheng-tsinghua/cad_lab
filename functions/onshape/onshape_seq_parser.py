@@ -21,7 +21,6 @@ import matplotlib.pyplot as plt
 from functions.onshape import macro
 from functions.onshape.OspGeomBase import OspPoint
 import numpy as np
-from datetime import datetime
 
 
 def point_list_to_numpy(osp_point_list: list[OspPoint]):
@@ -52,30 +51,6 @@ def plot_3d_sketch(sample_list):
     ax.set_zlabel('Z')
 
     plt.show()
-
-
-def request_sketch_plane(skh_parser_list, save_path, model_url):
-    """
-    批量获取草图平面信息
-    :param skh_parser_list:
-    :param save_path:
-    :param model_url:
-    :return:
-    """
-    v_list = model_url.split("/")
-    did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
-    onshape_client = OnshapeClient()
-
-    all_req_id = []
-    for i, item in enumerate(skh_parser_list):
-        all_req_id.append(item.sketch_plane_id)
-
-    res = onshape_client.get_face_by_id(did, wid, eid, all_req_id)
-
-    with open(save_path, 'w') as f:
-        json.dump(res.json(), f, ensure_ascii=False, indent=4)
-
-    return res.json()
 
 
 def request_model_ofs(
