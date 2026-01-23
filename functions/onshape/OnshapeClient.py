@@ -116,7 +116,7 @@ class Client(object):
 
         return self._api.request('post', '/api/assemblies/d/' + did + '/w/' + wid, body=payload)
 
-    def request_features(self, did, wid, eid):
+    def request_features(self, model_url):
         """
         Gets the feature list for specified document / workspace / part studio.
 
@@ -128,7 +128,11 @@ class Client(object):
         Returns:
             - requests.Response: Onshape response data
         """
-        return self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/features')
+        v_list = model_url.split("/")
+        did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+        res = self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/features')
+        return res.json()
 
     def get_partstudio_tessellatededges(self, did, wid, eid):
         """
@@ -450,7 +454,7 @@ class OnshapeClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         return res.json()
 
-    def request_multi_feat_topology(self, did, wid, eid, fea_id_list):
+    def request_multi_feat_topology(self, model_url, fea_id_list):
         """
         通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
 
@@ -544,6 +548,9 @@ class OnshapeClient(Client):
                 "}",
             "queries": []
         }
+
+        v_list = model_url.split("/")
+        did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
         res = self._api.request('post',
                                 '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',

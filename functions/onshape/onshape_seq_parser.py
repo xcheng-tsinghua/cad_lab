@@ -53,43 +53,6 @@ def plot_3d_sketch(sample_list):
     plt.show()
 
 
-def request_model_ofs(
-        client: OnshapeClient,
-        model_url: str
-):
-    """
-    从服务器请求原始特征列表
-    :param client:
-    :param model_url:
-    :return:
-    """
-    v_list = model_url.split("/")
-    did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
-
-    orig_ofs = client.request_features(did, wid, eid).json()
-    return orig_ofs
-
-
-def request_multi_feat_topology(
-        onshape_client: OnshapeClient,
-        model_url: str,
-        all_sketch_id: list[str]
-):
-    """
-    批量获取草图中的全部区域信息
-    :param onshape_client:
-    :param model_url:
-    :param all_sketch_id: 草图节点 ID 列表
-    :return:
-    """
-    v_list = model_url.split("/")
-    did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
-
-    # 一次请求全部的 sketch topo
-    res = onshape_client.request_multi_feat_topology(did, wid, eid, all_sketch_id)
-    return res
-
-
 def parse_onshape_topology(
         model_url: str = macro.URL,
         is_load_ofs: bool = True,
@@ -109,7 +72,7 @@ def parse_onshape_topology(
             ofs = json.load(f)
     else:
         print('从 onshape 请求原始特征列表')
-        ofs = request_model_ofs(onshape_client, model_url)
+        ofs = onshape_client.request_features(model_url)
 
         print('保存原始特征列表')
         with open(ofs_path, 'w') as f:
@@ -132,7 +95,7 @@ def parse_onshape_topology(
             sketch_operation_topo = json.load(f)
     else:
         print('从 onshape 请求原始拓扑列表')
-        sketch_operation_topo = request_multi_feat_topology(onshape_client, model_url, all_feat_id)
+        sketch_operation_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id)
 
         print('保存原始拓扑列表')
         with open(topo_path, 'w') as f:
