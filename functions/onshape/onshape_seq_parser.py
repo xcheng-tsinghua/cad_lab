@@ -104,7 +104,7 @@ def parse_onshape_topology(
 
     ofs_path = os.path.join(save_root, 'orig_ofs.json')
     if is_load_ofs:
-        print('从文件加载原始特征列表')
+        print(f'从文件加载原始特征列表: {ofs_path}')
         with open(ofs_path, 'r') as f:
             ofs = json.load(f)
     else:
@@ -127,7 +127,7 @@ def parse_onshape_topology(
     # 获取全部的草图和建模操作产生的实体的 topology
     topo_path = os.path.join(save_root, 'sketch_operation_topo.json')
     if is_load_topo:
-        print('从文件加载原始拓扑列表')
+        print(f'从文件加载原始拓扑列表: {topo_path}')
         with open(topo_path, 'r') as f:
             sketch_operation_topo = json.load(f)
     else:
