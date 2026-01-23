@@ -9,8 +9,8 @@
   "secret_key": "your_secret_key"
 }
 
-ofs: 表示原始的从 onshape 上下载的文件内容的一部分
-OSP: onshape sequence parser 简写
+ofs: onshape feature sequence 表示原始的从 onshape 上下载的文件内容的一部分
+Osp: onshape sequence parser 简写
 
 """
 import os
@@ -78,7 +78,10 @@ def request_sketch_plane(skh_parser_list, save_path, model_url):
     return res.json()
 
 
-def request_model_ofs(client, model_url):
+def request_model_ofs(
+        client: OnshapeClient,
+        model_url: str
+):
     """
     从服务器请求原始特征列表
     :param client:
@@ -92,16 +95,20 @@ def request_model_ofs(client, model_url):
     return orig_ofs
 
 
-def request_sketch_topology(all_sketch_id, model_url):
+def request_sketch_topology(
+        onshape_client: OnshapeClient,
+        model_url: str,
+        all_sketch_id: list[str]
+):
     """
     批量获取草图中的全部区域信息
-    :param all_sketch_id: 草图节点 ID 列表
+    :param onshape_client:
     :param model_url:
+    :param all_sketch_id: 草图节点 ID 列表
     :return:
     """
     v_list = model_url.split("/")
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
-    onshape_client = OnshapeClient()
 
     # 一次请求全部的 sketch topo
     res = onshape_client.eval_multi_sketch_topology(did, wid, eid, all_sketch_id)
@@ -128,12 +135,59 @@ def parse_onshape_topology(is_load_ofs_and_topo=False):
         print('从服务器请求原始特征列表')
         ofs = request_model_ofs(onshape_client, model_url)
 
+        print('保存原始特征列表')
         with open(ofs_path, 'w') as f:
             json.dump(ofs, f, ensure_ascii=False, indent=4)
 
-    #########################
+    # 获取全部的草图和建模操作的 id
+    all_sketch_id = []
+    all_operation_id = []
+    for i, fea_item_ofs in enumerate(ofs['features']):
+        feat_type = fea_item_ofs['message']['featureType']
 
+        if feat_type == 'newSketch':
+            all_sketch_id.append(fea_item_ofs['message']['featureId'])
 
+        elif feat_type in ('extrude', 'revolve', 'loft', 'sweep', '倒角、圆角、线性阵列、圆周阵列？'):
+            all_operation_id.append(fea_item_ofs['message']['featureId'])
+
+    # 获取全部的草图和建模操作产生的实体的 topology
+    topo_path = os.path.join(save_root, 'sketch_operation_topo.json')
+    if is_load_ofs_and_topo:
+        print('从文件加载原始拓扑列表')
+        with open(topo_path, 'r') as f:
+            sketch_operation_topo = json.load(f)
+
+    else:
+        sketch_operation_topo = request_sketch_topology(onshape_client, macro.URL, all_sketch_id + all_operation_id)
+
+        print('保存原始拓扑列表')
+        with open(topo_path, 'w') as f:
+            json.dump(sketch_operation_topo, f, ensure_ascii=False, indent=4)
+
+    val1st_ofs = sketch_operation_topo['result']['message']['value']
+
+    # 将草图和操作形成的拓扑分开
+    # n_sketch = len(all_sketch_id)
+    # val1st_sketch_ofs, val1st_operation_ofs = val1st_ofs[:n_sketch], val1st_ofs[n_sketch:]
+
+    # 获取全部拓扑
+    all_sketch_parsed = []
+    for val1st_item_ofs in val1st_ofs:
+        sketch_parsed = Sketch(val1st_item_ofs)
+        all_sketch_parsed.append(sketch_parsed)
+
+    # 获取绘图元素：
+    all_plots = []
+    for sketch in all_sketch_parsed:
+        for region in sketch.region_list:
+            for prim in region.primitive_list:
+                sample_list = prim.sample()
+                all_plots.append(point_list_to_numpy(sample_list))
+
+    # 绘图
+    plot_3d_sketch(all_plots)
+    return all_sketch_parsed
 
 
 def test_parse_sketch():
@@ -163,7 +217,8 @@ def test_parse_sketch():
     # exit('asasadasdaaa')
 
     # 解析全部草图参数
-    all_topo_file = os.path.join(macro.SAVE_ROOT, 'all_ops_topo_13_16_29.json')
+    # all_topo_file = os.path.join(macro.SAVE_ROOT, 'all_ops_topo_13_16_29.json')
+    all_topo_file = os.path.join(macro.SAVE_ROOT, 'all_sketch_topo_20_16_58.json')
     with open(all_topo_file, 'r') as f:
         all_sketch_topo = json.load(f)
 
@@ -176,12 +231,18 @@ def test_parse_sketch():
         all_sketch_parsed.append(sketch_parsed)
 
     # 获取绘图元素：
+    # all_plots = []
+    # for sketch in all_sketch_parsed:
+    #     for _, region in sketch.region_dict.items():
+    #         for prim in region.primitive_list:
+    #             sample_list = prim.sample()
+    #             all_plots.append(point_list_to_numpy(sample_list))
+
     all_plots = []
     for sketch in all_sketch_parsed:
-        for region in sketch.region_list:
-            for prim in region.primitive_list:
-                sample_list = prim.sample()
-                all_plots.append(point_list_to_numpy(sample_list))
+        for _, prim in sketch.edge_dict.items():
+            sample_list = prim.sample()
+            all_plots.append(point_list_to_numpy(sample_list))
 
     # 绘图
     plot_3d_sketch(all_plots)

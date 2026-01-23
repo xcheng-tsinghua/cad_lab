@@ -495,7 +495,7 @@ class OnshapeClient(Client):
                 "              const edge_id = transientQueriesToStrings(edge_arr[j]);"
                 "              edge_topo.id = edge_id;"
                 "              edge_topo.vertices = [];"
-                "              edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});" # 
+                "              edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});"
                 "              face_topo.edges = append(face_topo.edges, edge_id);"
 
                 "              var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);"
