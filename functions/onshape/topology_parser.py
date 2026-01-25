@@ -152,7 +152,7 @@ def parse_edge_end_points_by_id(point_id_list: list[str], vertices_topo_dict: di
 
 
 def parse_feat_topo(val2nd_ofs):
-    topo = {'regions': [], 'edges': [], 'vertices': []}
+    topo = {}
     for val2nd_item_ofs in val2nd_ofs:
         val2nd_item_type = val2nd_item_ofs['message']['key']['message']['value']  # ['regions, 'edges', 'vertices']
         val4th_ofs = val2nd_item_ofs['message']['value']['message']['value']
@@ -169,7 +169,7 @@ def parse_feat_topo(val2nd_ofs):
                 val6th_ofs = val5th_item_ofs['message']['value']
 
                 if elem_type == 'param':
-                    if val2nd_item_type == 'regions':
+                    if val2nd_item_type in ('regions', 'faces'):
                         v = parse_region_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'edges':

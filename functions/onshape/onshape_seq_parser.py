@@ -53,6 +53,54 @@ def plot_3d_sketch(sample_list):
     plt.show()
 
 
+def get_all_entity_ids(ofs, result=None):
+    if result is None:
+        result = []
+
+    if isinstance(ofs, dict):
+        for k, v in ofs.items():
+            if k == "geometryIds" and isinstance(v, list):
+                result.extend(v)
+            else:
+                get_all_entity_ids(v, result)
+
+    elif isinstance(ofs, list):
+        for item in ofs:
+            get_all_entity_ids(item, result)
+
+    return result
+
+
+def extract_entity_ids(node, out=None):
+    if out is None:
+        out = set()
+
+    if isinstance(node, dict):
+        type_name = node.get("typeName")
+
+        # 关键：MapEntry
+        if type_name == "BTFSValueMapEntry":
+            key = node.get("message", {}).get("key", {})
+            val = node.get("message", {}).get("value", {})
+
+            if (
+                key.get("typeName") == "BTFSValueString"
+                and key.get("message", {}).get("value") == "id"
+                and val.get("typeName") == "BTFSValueString"
+            ):
+                out.add(val["message"]["value"])
+
+        # 递归所有字段
+        for v in node.values():
+            extract_entity_ids(v, out)
+
+    elif isinstance(node, list):
+        for item in node:
+            extract_entity_ids(item, out)
+
+    return out
+
+
 def parse_onshape_topology(
         model_url: str = macro.URL,
         is_load_ofs: bool = True,
@@ -78,37 +126,64 @@ def parse_onshape_topology(
         with open(ofs_path, 'w') as f:
             json.dump(ofs, f, ensure_ascii=False, indent=4)
 
-    # 获取全部的草图和建模操作的 id
-    all_feat_id = []
-    for i, fea_item_ofs in enumerate(ofs['features']):
-        feat_type = fea_item_ofs['message']['featureType']
-        feat_id = fea_item_ofs['message']['featureId']
+    # # 获取全部的草图和建模操作的 id
+    # all_feat_id = []
+    # for i, fea_item_ofs in enumerate(ofs['features']):
+    #     feat_type = fea_item_ofs['message']['featureType']
+    #     feat_id = fea_item_ofs['message']['featureId']
+    #
+    #     print(f'feat_type: {feat_type}, feat_id: {feat_id}')
+    #     all_feat_id.append(fea_item_ofs['message']['featureId'])
+    #
+    # # 获取全部的草图和建模操作产生的实体的 topology
+    # topo_path = os.path.join(save_root, 'sketch_operation_topo.json')
+    # if is_load_topo:
+    #     print(f'从文件加载原始拓扑列表: {topo_path}')
+    #     with open(topo_path, 'r') as f:
+    #         sketch_operation_topo = json.load(f)
+    # else:
+    #     print('从 onshape 请求原始拓扑列表')
+    #     sketch_operation_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id)
+    #
+    #     print('保存原始拓扑列表')
+    #     with open(topo_path, 'w') as f:
+    #         json.dump(sketch_operation_topo, f, ensure_ascii=False, indent=4)
 
-        print(f'feat_type: {feat_type}, feat_id: {feat_id}')
-        all_feat_id.append(fea_item_ofs['message']['featureId'])
+    # 获取全部需要的实体 id
+    entity_ids_all = get_all_entity_ids(ofs)
 
-    # 获取全部的草图和建模操作产生的实体的 topology
-    topo_path = os.path.join(save_root, 'sketch_operation_topo.json')
+    # 获取全部的实体 topo
+    topo_path = os.path.join(save_root, 'entity_topo.json')
     if is_load_topo:
         print(f'从文件加载原始拓扑列表: {topo_path}')
         with open(topo_path, 'r') as f:
             sketch_operation_topo = json.load(f)
     else:
         print('从 onshape 请求原始拓扑列表')
-        sketch_operation_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id)
+        sketch_operation_topo = onshape_client.request_multi_entity_topology(model_url, entity_ids_all)
 
         print('保存原始拓扑列表')
         with open(topo_path, 'w') as f:
             json.dump(sketch_operation_topo, f, ensure_ascii=False, indent=4)
 
+    all_parsed_ids = extract_entity_ids(sketch_operation_topo)
+
+    a = set(all_parsed_ids)
+    b = set(entity_ids_all)
+    intersection = list(a & b)  # 交集
+    union = list(a | b)  # 并集
+    diff_a = list(a - b)
+    diff_b = list(b - a)
+
     val1st_ofs = sketch_operation_topo['result']['message']['value']
 
     # 获取全部拓扑
-    all_topo_parsed = {'regions': [], 'edges': [], 'vertices': []}
+    all_topo_parsed = {'faces': [], 'regions': [], 'edges': [], 'vertices': []}
     for val1st_item_ofs in val1st_ofs:
         topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
 
-        all_topo_parsed['regions'].extend(topo_parsed['regions'])
+        all_topo_parsed['faces'].extend(topo_parsed['faces'])
+        # all_topo_parsed['regions'].extend(topo_parsed['regions'])
         all_topo_parsed['edges'].extend(topo_parsed['edges'])
         all_topo_parsed['vertices'].extend(topo_parsed['vertices'])
 
