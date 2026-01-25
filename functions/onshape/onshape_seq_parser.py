@@ -104,7 +104,7 @@ def extract_entity_ids(node, out=None):
 def parse_onshape_topology(
         model_url: str = macro.URL,
         is_load_ofs: bool = True,
-        is_load_topo: bool = True,
+        is_load_topo: bool = False,
         save_root: str = macro.SAVE_ROOT
 ):
     """
@@ -150,32 +150,41 @@ def parse_onshape_topology(
     #         json.dump(sketch_operation_topo, f, ensure_ascii=False, indent=4)
 
     # 获取全部需要的实体 id
-    entity_ids_all = get_all_entity_ids(ofs)
+    entity_ids_all = list(set(get_all_entity_ids(ofs)))
+
+    entity_not_parsed = ['JRC', 'JH1', 'JHO', 'JKK', 'JRq', 'JkV', 'JdI', 'JUC', 'JHU', 'JHC', 'JHt', 'KRRB', 'JHS', 'JVC', 'JHG', 'JHF', 'JRG', 'JR+', 'JlC', 'JRm', 'JHW', 'Jdx', 'JHd']
+
+    list_str = "var q_entity_list = [" + ",".join([f"\"{fid}\"" for fid in entity_ids_all]) + "];"
 
     # 获取全部的实体 topo
-    topo_path = os.path.join(save_root, 'entity_topo.json')
+    topo_path = os.path.join(save_root, 'entity_topo_idx_not_parsed.json')
     if is_load_topo:
         print(f'从文件加载原始拓扑列表: {topo_path}')
         with open(topo_path, 'r') as f:
-            sketch_operation_topo = json.load(f)
+            entity_topo = json.load(f)
     else:
         print('从 onshape 请求原始拓扑列表')
-        sketch_operation_topo = onshape_client.request_multi_entity_topology(model_url, entity_ids_all)
+        entity_topo = onshape_client.request_multi_entity_topology(model_url, entity_not_parsed)
 
         print('保存原始拓扑列表')
         with open(topo_path, 'w') as f:
-            json.dump(sketch_operation_topo, f, ensure_ascii=False, indent=4)
+            json.dump(entity_topo, f, ensure_ascii=False, indent=4)
 
-    all_parsed_ids = extract_entity_ids(sketch_operation_topo)
+    all_parsed_ids = list(set(extract_entity_ids(entity_topo)))
 
-    a = set(all_parsed_ids)
-    b = set(entity_ids_all)
+    # entity_ids_all.append('Top')
+    # entity_ids_all.append('Front')
+    # entity_ids_all.append('Right')
+
+    a = set(entity_ids_all)
+    b = set(all_parsed_ids)
+
     intersection = list(a & b)  # 交集
     union = list(a | b)  # 并集
-    diff_a = list(a - b)
-    diff_b = list(b - a)
+    not_in_parsed = list(a - b)
+    # not_in_required = list(b - a)
 
-    val1st_ofs = sketch_operation_topo['result']['message']['value']
+    val1st_ofs = entity_topo['result']['message']['value']
 
     # 获取全部拓扑
     all_topo_parsed = {'faces': [], 'regions': [], 'edges': [], 'vertices': []}

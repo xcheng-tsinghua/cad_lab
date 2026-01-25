@@ -402,23 +402,29 @@ class OnshapeClient(Client):
 
         Returns:
             - dict: a hierarchical parametric representation
+
+
+            # var q_entity_list = [''' + ",".join([f"\"{fid}\"" for fid in ent_id_list]) + '''];
+
+
         """
         body = {
             'script': '''function(context is Context, queries) {
-            // var all_eval_ids = []; // 已评估的id，不会重复评估
+            var all_eval_ids = []; // 已评估的id，不会重复评估
             var res_list = [];  // 最终返回的结果列表
-
             var q_entity_list = evaluateQuery(context, queries.id);
+            
+            var entity_num = {};
+            entity_num.n_entity = size(q_entity_list);
+            res_list = append(res_list, entity_num);
+            
             for (var i = 0; i < size(q_entity_list); i+= 1){ // entityId 食欲个包含了诸如 JDC、JGI的id列表
                 var q_entity = q_entity_list[i];
 
                 const entity_id = transientQueriesToStrings(q_entity);
 
-                // 判断是否已评估该id对应的实体
-                // if (isIn(entity_id, all_eval_ids)){continue;}
-                // all_eval_ids = append(all_eval_ids, entity_id);
-
                 var topo = {};  // 设置当前id对应的属性
+                topo.index = i;
                 topo.id = entity_id;
                 topo.faces = [];  // 如果当前id是面，那么face数组size为1，edge数组包含该面下的边，vertices数组包含所有边下的所有点
                 topo.edges = [];
@@ -435,8 +441,8 @@ class OnshapeClient(Client):
                     const face_id = transientQueriesToStrings(q_entity);
 
                     // 判断是否已评估该id对应的实体
-                    // if (isIn(face_id, all_eval_ids)){continue;}
-                    // all_eval_ids = append(all_eval_ids, face_id);
+                    if (isIn(face_id, all_eval_ids)){continue;}
+                    all_eval_ids = append(all_eval_ids, face_id);
 
                     // 设置主拓扑类型
                     topo.entityType = "FACE";
@@ -455,8 +461,8 @@ class OnshapeClient(Client):
                         face_topo.edges = append(face_topo.edges, edge_id);
 
                         // 判断是否已评估该id对应的实体
-                        // if (isIn(edge_id, all_eval_ids)){continue;}
-                        // all_eval_ids = append(all_eval_ids, edge_id);
+                        if (isIn(edge_id, all_eval_ids)){continue;}
+                        all_eval_ids = append(all_eval_ids, edge_id);
 
                         var edge_topo = {};
                         edge_topo.id = edge_id;
@@ -470,8 +476,8 @@ class OnshapeClient(Client):
                             edge_topo.vertices = append(edge_topo.vertices, vertex_id);
 
                             // 判断是否已评估该id对应的实体
-                            // if (isIn(vertex_id, all_eval_ids)){continue;}
-                            // all_eval_ids = append(all_eval_ids, vertex_id);
+                            if (isIn(vertex_id, all_eval_ids)){continue;}
+                            all_eval_ids = append(all_eval_ids, vertex_id);
 
                             // 每个点仅包含：点的定义、点的id
                             var vertex_topo = {};
@@ -495,8 +501,8 @@ class OnshapeClient(Client):
                     const edge_id = transientQueriesToStrings(q_entity);
 
                     // 判断是否已评估该id对应的实体
-                    // if (isIn(edge_id, all_eval_ids)){continue;}
-                    // all_eval_ids = append(all_eval_ids, edge_id);
+                    if (isIn(edge_id, all_eval_ids)){continue;}
+                    all_eval_ids = append(all_eval_ids, edge_id);
 
                     // 设置主拓扑类型
                     topo.entityType = "EDGE";
@@ -513,8 +519,8 @@ class OnshapeClient(Client):
                         edge_topo.vertices = append(edge_topo.vertices, vertex_id);
 
                         // 判断是否已评估该id对应的实体
-                        // if (isIn(vertex_id, all_eval_ids)){continue;}
-                        // all_eval_ids = append(all_eval_ids, vertex_id);
+                        if (isIn(vertex_id, all_eval_ids)){continue;}
+                        all_eval_ids = append(all_eval_ids, vertex_id);
 
                         // 每个点仅包含：点的定义、点的id
                         var vertex_topo = {};
@@ -535,8 +541,8 @@ class OnshapeClient(Client):
                     const vertex_id = transientQueriesToStrings(q_entity);
 
                     // 判断是否已评估该id对应的实体
-                    // if (isIn(vertex_id, all_eval_ids)){continue;}
-                    // all_eval_ids = append(all_eval_ids, vertex_id);
+                    if (isIn(vertex_id, all_eval_ids)){continue;}
+                    all_eval_ids = append(all_eval_ids, vertex_id);
 
                     // 设置主拓扑类型
                     topo.entityType = "VERTEX";
