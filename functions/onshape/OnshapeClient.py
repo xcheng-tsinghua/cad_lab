@@ -635,40 +635,6 @@ class OnshapeClient(Client):
             edges.append(edge_param)
         return edges
 
-    @staticmethod
-    def parse_face_msg(response):
-        """
-        parse face parameters from OnShape response data
-        """
-        # data = response.json()['result']['message']['value']
-        data = [response] if not isinstance(response, list) else response
-        faces = []
-
-        for item in data:
-            face_msg = item['message']['value']
-            face_type = item['message']['typeTag']
-            face_param = {'type': face_type}
-
-            for msg in face_msg:
-                k = msg['message']['key']['message']['value']
-                v_item = msg['message']['value']['message']['value']
-                if k == 'coordSystem':
-                    v = MyClient.parse_coord_msg(v_item)
-
-                elif isinstance(v_item, list):
-                    v = [round(x['message']['value'], 8) for x in v_item]
-
-                else:
-                    if isinstance(v_item, float):
-                        v = round(v_item, 8)
-
-                    else:
-                        v = v_item
-
-                face_param[k] = v
-            faces.append(face_param)
-        return faces
-
     def eval_entityID_created_by_feature(self, did, wid, eid, feat_id, entity_type):
         """
         get IDs of all geometry entity created by a given feature, with specified type
