@@ -121,7 +121,7 @@ def parse_region_dict(sketch_topology, edge_dict):
     """
     # 将原始的 topology 解析为区域
     region_dict = {}
-    for region_topo_item in sketch_topology['regions']:
+    for region_topo_item in sketch_topology['faces']:
         region_edge_list = [edge_dict[edge_id] for edge_id in region_topo_item['edges']]
         region_parsed = OspRegion(region_edge_list, region_topo_item['id'])
 
