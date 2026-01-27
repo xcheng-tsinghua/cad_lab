@@ -202,3 +202,16 @@ class OspCoordSystem(object):
         return cls(origin, z_axis, x_axis)
 
 
+def point_list_to_numpy(osp_point_list: list[OspPoint]):
+    """
+    将一个包含 n 个点的列表转换为 [n * 3] 的 numpy 数组
+    :param osp_point_list:
+    :return:
+    """
+    np_list = []
+    for c_osp in osp_point_list:
+        np_list.append(c_osp.to_numpy())
+
+    np_list = np.vstack(np_list)
+    return np_list
+

@@ -50,8 +50,11 @@ def parse_edge_dict(sketch_topology, vert_dict):
             # 获取端点
             vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
 
+            # 获取中点
+            midpoint = OspPoint.from_list(edge_topo_item['midpoint'])
+
             # 构造圆
-            edge_parsed = OspCircle(coord_sys, radius, vertices[0], vertices[1], edge_id)
+            edge_parsed = OspCircle(coord_sys, radius, vertices[0], midpoint, vertices[1], edge_id)
 
         elif edge_type == 'ELLIPSE':
             # 找到所在的局部坐标系
@@ -66,8 +69,11 @@ def parse_edge_dict(sketch_topology, vert_dict):
             # 获取端点
             vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
 
+            # 获取中点
+            midpoint = OspPoint.from_list(edge_topo_item['midpoint'])
+
             # 构造椭圆
-            edge_parsed = OspEllipse(coord_sys, major_radius, minor_radius, vertices[0], vertices[1], edge_id)
+            edge_parsed = OspEllipse(coord_sys, major_radius, minor_radius, vertices[0], midpoint, vertices[1], edge_id)
 
         elif edge_type == 'SPLINE':
             # 获取控制点坐标
@@ -169,7 +175,7 @@ def parse_feat_topo(val2nd_ofs):
                 val6th_ofs = val5th_item_ofs['message']['value']
 
                 if elem_type == 'param':
-                    if val2nd_item_type in ('regions', 'faces'):
+                    if val2nd_item_type == 'faces':
                         v = parse_region_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'edges':
@@ -186,6 +192,9 @@ def parse_feat_topo(val2nd_ofs):
 
                 elif elem_type == 'id':
                     v = val6th_ofs['message']['value']
+
+                elif elem_type == 'midpoint':
+                    v = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
                 else:
                     warn(f'not considered key occurred: {elem_type}, parsed as [message][value]')

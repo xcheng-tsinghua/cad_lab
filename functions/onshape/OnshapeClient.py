@@ -300,7 +300,7 @@ class OnshapeClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         return res
 
-    def request_multi_feat_topology(self, model_url, fea_id_list, is_load, json_path):
+    def request_multi_feat_topology(self, model_url, feat_id_list, is_load, json_path):
         """
         通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
 
@@ -316,82 +316,72 @@ class OnshapeClient(Client):
 
         body = {
             "script":
-                "function(context is Context, queries) { "
-                "   var res_list = [];"
-                "   var q_arr = [" + ",".join([f"\"{fid}\"" for fid in fea_id_list]) + "];"
-                "   for (var l = 0; l < size(q_arr); l+= 1){"
-                "       var topo = {};"
-                # "       topo.regions = [];"
-                "       topo.faces = [];"
-                "       topo.edges = [];"
-                "       topo.vertices = [];"
-
-                # "       /* ---------- 1. Regions (regions only) ---------- */"  # 区域列表，每个区域仅包含：区域的定义、区域id、该区域下的边id。但实测 region 不如 face 获得的信息多
-                # "       var q_region = qSketchRegion(makeId(q_arr[l]));"
-                # "       var region_arr = evaluateQuery(context, q_region);"
-                # "       for (var i = 0; i < size(region_arr); i += 1) {"
-                # "           var region_topo = {};"
-                # "           region_topo.id = transientQueriesToStrings(region_arr[i]);"  # 区域id
-                # "           region_topo.edges = [];"  # 该区域下的边id
-                # "           region_topo.param = evSurfaceDefinition(context, {face: region_arr[i]});"  # 区域的定义
-                # "           var q_edge = qAdjacent(region_arr[i], AdjacencyType.EDGE, EntityType.EDGE);"
-                # "           var edge_arr = evaluateQuery(context, q_edge);"
-                # "           for (var j = 0; j < size(edge_arr); j += 1) {"
-                # "               const edge_id = transientQueriesToStrings(edge_arr[j]);"
-                # "               region_topo.edges = append(region_topo.edges, edge_id);"
-                # "           }"
-                # "           topo.regions = append(topo.regions, region_topo);"
-                # "       }"
-                                   
-                "      /* ---------- 2. Face (ALL faces generated) ---------- */"  # 面列表，每个面仅包含：面的定义、面id、该面下的边id。
-                "       var q_face = qCreatedBy(makeId(q_arr[l]), EntityType.FACE);"
-                "       var face_arr = evaluateQuery(context, q_face);"
-                "       for (var i = 0; i < size(face_arr); i += 1) {"
-                "           var face_topo = {};"
-                "           face_topo.id = transientQueriesToStrings(face_arr[i]);"  # 面id
-                "           face_topo.edges = [];"  # 该面下的边id
-                "           face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});"  # 面的定义
-                "           var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);"
-                "           var edge_arr = evaluateQuery(context, q_edge);"
-                "           for (var j = 0; j < size(edge_arr); j += 1) {"
-                "               const edge_id = transientQueriesToStrings(edge_arr[j]);"
-                "               face_topo.edges = append(face_topo.edges, edge_id);"
-                "           }"
-                "           topo.faces = append(topo.faces, face_topo);"
-                "       }"
-                                                                                        
-                "      /* ---------- 3. Edges (ALL sketch edges, open or closed) ---------- */"  # 边列表，每个边仅包含：边的定义、边的id、该边下的端点id
-                "      var q_edge = qCreatedBy(makeId(q_arr[l]), EntityType.EDGE);"
-                "      var edge_arr = evaluateQuery(context, q_edge);"
-                "      for (var j = 0; j < size(edge_arr); j += 1) {"
-                "          var edge_topo = {};"
-                "          const edge_id = transientQueriesToStrings(edge_arr[j]);"
-                "          edge_topo.id = edge_id;"  # 边的id
-                "          edge_topo.vertices = [];"  # 该边下的端点id
-                "          edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});"  # 边的定义
-                "          var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);"
-                "          var vertex_arr = evaluateQuery(context, q_vertex);"
-                "          for (var k = 0; k < size(vertex_arr); k += 1) {"
-                "              const vertex_id = transientQueriesToStrings(vertex_arr[k]);"
-                "              edge_topo.vertices = append(edge_topo.vertices, vertex_id);"
-                "          }"
-                "          topo.edges = append(topo.edges, edge_topo);"                                                           
-                "      }"
-                                                                                        
-                "       /* ---------- 4. Vertices (ALL sketch vertices) ---------- */"  # 点列表，每个点仅包含：点的定义、点的id
-                "      var q_vertex = qCreatedBy(makeId(q_arr[l]), EntityType.VERTEX);"
-                "      var vertex_arr = evaluateQuery(context, q_vertex);"
-                "      for (var k = 0; k < size(vertex_arr); k += 1) {"
-                "          var vertex_topo = {};"
-                "          const vertex_id = transientQueriesToStrings(vertex_arr[k]);"
-                "          vertex_topo.id = vertex_id;"  # 点的id
-                "          vertex_topo.param = evVertexPoint(context, {vertex: vertex_arr[k]});"  # 点的定义
-                "          topo.vertices = append(topo.vertices, vertex_topo);"
-                "      }"
-                "      res_list = append(res_list, topo);"
-                "   }"
-                "   return res_list;"
-                "}",
+                '''
+                function(context is Context, queries) { 
+                    var res_list = [];
+                    var q_arr = [''' + ",".join([f"\"{fid}\"" for fid in feat_id_list]) + "];" +
+                '''
+                    for (var l = 0; l < size(q_arr); l+= 1){
+                        var topo = {};
+                        topo.faces = [];
+                        topo.edges = [];
+                        topo.vertices = [];
+                    
+                        /* ---------- 1. Face (ALL faces generated) ---------- */
+                        var q_face = qCreatedBy(makeId(q_arr[l]), EntityType.FACE);
+                        var face_arr = evaluateQuery(context, q_face);
+                        for (var i = 0; i < size(face_arr); i += 1) {
+                            var face_topo = {};
+                            face_topo.id = transientQueriesToStrings(face_arr[i]);
+                            face_topo.edges = [];
+                            face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});
+                            var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);
+                            var edge_arr = evaluateQuery(context, q_edge);
+                            for (var j = 0; j < size(edge_arr); j += 1) {
+                                const edge_id = transientQueriesToStrings(edge_arr[j]);
+                                face_topo.edges = append(face_topo.edges, edge_id);
+                            }
+                            topo.faces = append(topo.faces, face_topo);
+                        }
+                                                                                                        
+                        /* ---------- 2. Edges (ALL sketch edges, open or closed) ---------- */
+                        var q_edge = qCreatedBy(makeId(q_arr[l]), EntityType.EDGE);
+                        var edge_arr = evaluateQuery(context, q_edge);
+                        for (var j = 0; j < size(edge_arr); j += 1) {
+                            var edge_topo = {};
+                            const edge_id = transientQueriesToStrings(edge_arr[j]);
+                            edge_topo.id = edge_id;
+                            edge_topo.vertices = [];
+                            edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});
+                            
+                            // obtain the midpoint of the edge
+                            var midpoint = evEdgeTangentLine(context, {edge: edge_arr[j], \"parameter\": 0.5 }).origin;
+                            edge_topo.midpoint = midpoint;
+                            
+                            var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);
+                            var vertex_arr = evaluateQuery(context, q_vertex);
+                            for (var k = 0; k < size(vertex_arr); k += 1) {
+                                const vertex_id = transientQueriesToStrings(vertex_arr[k]);
+                                edge_topo.vertices = append(edge_topo.vertices, vertex_id);
+                            }
+                            topo.edges = append(topo.edges, edge_topo);                                                           
+                        }
+                                                                                                        
+                       /* ---------- 3. Vertices (ALL sketch vertices) ---------- */
+                        var q_vertex = qCreatedBy(makeId(q_arr[l]), EntityType.VERTEX);
+                        var vertex_arr = evaluateQuery(context, q_vertex);
+                        for (var k = 0; k < size(vertex_arr); k += 1) {
+                            var vertex_topo = {};
+                            const vertex_id = transientQueriesToStrings(vertex_arr[k]);
+                            vertex_topo.id = vertex_id;
+                            vertex_topo.param = evVertexPoint(context, {vertex: vertex_arr[k]});
+                            topo.vertices = append(topo.vertices, vertex_topo);
+                        }
+                        res_list = append(res_list, topo);
+                    }
+                    return res_list;
+                }
+                ''',
             "queries": []
         }
 
@@ -647,12 +637,9 @@ class OnshapeClient(Client):
             var q_entity_list = [];
             ''' +
 
-            # 'var entity_list = [' + ','.join([f'\"{fid}\"' for fid in ent_id_list]) + '];' +  # entity_list = ["JDC", "JHS", ...]
-
             "\n".join(f"""var q_entity{i} = evaluateQuery(context, queries.id{i}); 
             if (size(q_entity{i}) == 1) {{
             q_entity_list = append(q_entity_list, q_entity{i}[0]);}}""" for i in range(len(ent_id_list))) +
-
             '''
             
             var entity_num = {};
@@ -661,7 +648,6 @@ class OnshapeClient(Client):
 
             for (var i = 0; i < size(q_entity_list); i+= 1){
                 var q_entity = q_entity_list[i];
-
                 const entity_id = transientQueriesToStrings(q_entity);
 
                 var topo = {};
@@ -817,28 +803,6 @@ class OnshapeClient(Client):
                 json.dump(entity_topo, f, ensure_ascii=False, indent=4)
 
         return entity_topo
-
-    def eval_bodydetails(self, did, wid, eid):
-        """
-        parse the B-rep representation as a dict
-        """
-        res = self._api.request('get', '/api/partstudios/d/{}/w/{}/e/{}/bodydetails'.format(did, wid, eid)).json()
-        # extract local coordinate system for each face
-        for body in res['bodies']:
-            all_face_ids = [face['id'] for face in body['faces']]
-            face_entity = self.get_entity_by_id(did, wid, eid, all_face_ids, 'FACE')
-            face_params = self.parse_face_msg(face_entity.json()['result']['message']['value'])
-            for i, face in enumerate(body['faces']):
-                if face_params[i]['type'] == 'Plane':
-                    x_axis = face_params[i]['x']
-                elif face_params[i]['type'] == '':
-                    x_axis = []
-                else:
-                    x_axis = face_params[i]['coordSystem']['xAxis']
-                    z_axis = face_params[i]['coordSystem']['zAxis']
-                    face['surface'].update({'z_axis': z_axis})
-                face['surface'].update({'x_axis': x_axis})
-        return res
 
     def eval_curve_midpoint(self, did, wid, eid, geo_id):
         """

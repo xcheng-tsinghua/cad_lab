@@ -66,19 +66,14 @@ class OspCircle(object):
                  coord_sys: OspCoordSystem,
                  radius: float,
                  start_point: OspPoint,  # 建模空间三维点，闭合时为 None
+                 mid_point: OspPoint,  # 建模空间三维点，用于确定圆弧旋转方向
                  end_point: OspPoint,  # 建模空间三维点，闭合时为 None
                  topo_id: str
                  ):
-        """
-
-        :param coord_sys: 局部坐标系，原点为圆心位置，Z方向呈右手系旋转方向
-        :param radius: 半径
-        :param start_point: 起始点
-        :param end_point: 终止点
-        """
         self.coord_sys = coord_sys
         self.radius = radius
         self.start_point = start_point
+        self.mid_point = mid_point
         self.end_point = end_point
         self.id = topo_id
 
@@ -89,50 +84,48 @@ class OspCircle(object):
         :param n_samples: 采样点数量
         :return: (n_samples, 3) 的 numpy.ndarray
         """
+        C = self.coord_sys.origin          # 圆心
+        X = self.coord_sys.x_axis.normalize()
+        Z = self.coord_sys.z_axis.normalize()
+        Y = Z.cross(X).normalize()      # 右手系
 
-        origin = self.coord_sys.origin
-        x_axis = self.coord_sys.x_axis.normalize()
-        z_axis = self.coord_sys.z_axis.normalize()
+        R = self.radius
 
-        # 构造 y 轴，保证右手系
-        y_axis = z_axis.cross(x_axis).normalize()
-
-        def point_to_angle(p):
-            """
-            将空间点映射为局部坐标系下的极角
-            """
-            v = p - origin
-            x = v.dot(x_axis)
-            y = v.dot(y_axis)
-            return math.atan2(y, x)
-
-        # 整圆
+        # ========= 情况1：整圆 =========
         if self.start_point is None and self.end_point is None:
-            angles = np.linspace(
-                0.0,
-                2.0 * math.pi,
-                n_samples,
-                endpoint=False
-            )
+            theta_start = 0.0
+            theta_end = 2 * math.pi
+
+        # ========= 情况2：圆弧 =========
         else:
-            if self.start_point is None or self.end_point is None:
-                raise ValueError("圆弧必须同时提供 start_point 和 end_point")
+            v_start = (self.start_point - C)
+            v_mid = (self.mid_point - C)
+            v_end = (self.end_point - C)
 
-            theta_start = point_to_angle(self.start_point)
-            theta_end = point_to_angle(self.end_point)
+            theta_start = math.atan2(v_start.dot(Y), v_start.dot(X))  # [-pi, pi]
+            theta_mid = math.atan2(v_mid.dot(Y), v_mid.dot(X))
+            theta_end = math.atan2(v_end.dot(Y), v_end.dot(X))
 
-            # 保证沿 z_axis 定义的右手方向
-            if theta_end <= theta_start:
-                theta_end += 2.0 * math.pi
+            # 统一到 [0, 2π)
+            def wrap(theta):
+                return theta + 2 * math.pi if theta < 0 else theta
 
-            angles = np.linspace(theta_start, theta_end, n_samples)
+            theta_start = wrap(theta_start)
+            theta_mid = wrap(theta_mid)
+            theta_end = wrap(theta_end)
+            theta_start, theta_end = sorted((theta_start, theta_end))
 
+            # 圆弧不横跨 2pi
+            if not theta_start < theta_mid < theta_end:
+                theta_start, theta_end = theta_end, theta_start
+                theta_end += 2 * math.pi
+
+        # ========= 采样 =========
         points = []
-
-        for i, theta in enumerate(angles):
-            p_sample = origin + x_axis * (self.radius * math.cos(theta)) + y_axis * (self.radius * math.sin(theta))
-
-            points.append(p_sample)
+        for i in range(n_samples):
+            t = theta_start + (theta_end - theta_start) * i / (n_samples - 1)
+            p = C + (X * (R * math.cos(t))) + (Y * (R * math.sin(t)))
+            points.append(p)
 
         return points
 
@@ -142,10 +135,11 @@ class OspEllipse(object):
     表达椭圆
     """
     def __init__(self,
-                 coord_sys: OspCoordSystem,
+                 coord_sys: OspCoordSystem,  # x 轴为长轴方向，z轴为所在平面法向，该方向不代表圆弧旋转方向
                  major_radius: float,
                  minor_radius: float,
                  start_point: OspPoint,  # 建模空间三维点，闭合时为 None
+                 mid_point: OspPoint,  # 建模空间三维点，用于确定椭圆旋转方向
                  end_point: OspPoint,  # 建模空间三维点，闭合时为 None
                  topo_id: str
                  ):
@@ -157,6 +151,7 @@ class OspEllipse(object):
         self.major_radius = major_radius
         self.minor_radius = minor_radius
         self.start_point = start_point
+        self.mid_point = mid_point
         self.end_point = end_point
         self.id = topo_id
 
@@ -167,54 +162,53 @@ class OspEllipse(object):
         :param n_samples: 采样点数量
         :return: (n_samples, 3) numpy.ndarray
         """
-
-        origin = self.coord_sys.origin
-        x_axis = self.coord_sys.x_axis.normalize()
-        z_axis = self.coord_sys.z_axis.normalize()
-
-        # 保证右手系
-        y_axis = z_axis.cross(x_axis).normalize()
+        C = self.coord_sys.origin
+        X = self.coord_sys.x_axis.normalize()   # 长轴方向
+        Z = self.coord_sys.z_axis.normalize()   # 平面法线
+        Y = Z.cross(X).normalize()              # 短轴方向（自动）
 
         a = self.major_radius
         b = self.minor_radius
 
-        def point_to_angle(p):
-            """
-            将空间点映射为椭圆参数角 θ
-            """
-            v = p - origin
-            x = v.dot(x_axis) / a
-            y = v.dot(y_axis) / b
-            return math.atan2(y, x)
-
-        # 整椭圆
+        # ========= 整椭圆 =========
         if self.start_point is None and self.end_point is None:
-            angles = np.linspace(
-                0.0,
-                2.0 * math.pi,
-                n_samples,
-                endpoint=False
-            )
+            ts = 0.0
+            te = 2 * math.pi
+
+        # ========= 椭圆弧 =========
         else:
-            if self.start_point is None or self.end_point is None:
-                raise ValueError("椭圆弧必须同时提供 start_point 和 end_point")
+            def param_angle(p):
+                """
+                椭圆参数角 θ（不是几何极角）
+                """
+                v = p - C
+                x = v.dot(X)
+                y = v.dot(Y)
+                return math.atan2(y / b, x / a)
 
-            theta_start = point_to_angle(self.start_point)
-            theta_end = point_to_angle(self.end_point)
+            ts = param_angle(self.start_point)
+            tm = param_angle(self.mid_point)
+            te = param_angle(self.end_point)
 
-            # 保证沿 z_axis 右手方向
-            if theta_end <= theta_start:
-                theta_end += 2.0 * math.pi
+            # 统一到 [0, 2π)
+            def wrap(theta):
+                return theta + 2 * math.pi if theta < 0 else theta
 
-            angles = np.linspace(theta_start, theta_end, n_samples)
+            ts, tm, te = wrap(ts), wrap(tm), wrap(te)
+            ts, te = sorted((ts, te))
 
-        points = []
+            if not ts < tm < te:
+                ts, te = te, ts
+                te += 2 * math.pi
 
-        for i, theta in enumerate(angles):
-            p_sample = origin + x_axis * (a * math.cos(theta)) + y_axis * (b * math.sin(theta))
-            points.append(p_sample)
+        # ========= 采样 =========
+        pts = []
+        for i in range(n_samples):
+            t = ts + (te - ts) * i / (n_samples - 1)
+            p_sample = C + X * (a * math.cos(t)) + Y * (b * math.sin(t))
+            pts.append(p_sample)
 
-        return points
+        return pts
 
 
 class OspBSpline(object):
