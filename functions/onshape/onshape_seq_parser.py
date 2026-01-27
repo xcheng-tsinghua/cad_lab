@@ -158,7 +158,7 @@ def get_feat_id(feat_ofs):
 def parse_onshape_topology(
         model_url: str = macro.URL,
         is_load_ofs: bool = True,
-        is_load_topo: bool = True,
+        is_load_topo: bool = False,
         save_root: str = macro.SAVE_ROOT
 ):
     """
@@ -235,8 +235,11 @@ def parse_onshape_topology(
     #     with open(topo_path, 'w') as f:
     #         json.dump(entity_topo, f, ensure_ascii=False, indent=4)
 
-    topo_path = os.path.join(save_root, 'operation_topo.json')
-    entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id, is_load_topo, topo_path)
+    topo_path = os.path.join(save_root, 'entity_topo_required_v2.json')
+    entity_topo = onshape_client.request_multi_entity_topology_v2(model_url, entity_ids_required, is_load_topo, topo_path)
+
+    # topo_path = os.path.join(save_root, 'operation_topo.json')
+    # entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id, is_load_topo, topo_path)
 
     # 获取全部需要的实体 id
     # entity_ids_required = list(set(get_all_entity_ids(ofs)))

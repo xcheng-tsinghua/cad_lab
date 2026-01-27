@@ -417,7 +417,7 @@ class OnshapeClient(Client):
 
         return entity_topo
 
-    def request_multi_entity_topology(self, model_url, ent_id_list):
+    def request_multi_entity_topology(self, model_url, ent_id_list, is_load, json_path):
         """
         通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
 
@@ -602,11 +602,221 @@ class OnshapeClient(Client):
             "queries": [{"key": "id", "value": ent_id_list}]
         }
 
-        v_list = model_url.split("/")
-        did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
-        res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
+        if is_load:
+            print(f'从文件加载原始拓扑列表: {json_path}')
+            with open(json_path, 'r') as f:
+                entity_topo = json.load(f)
 
-        return res.json()
+        else:
+            print('从 onshape 请求原始拓扑列表')
+
+            v_list = model_url.split("/")
+            did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+            res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
+
+            entity_topo = res.json()
+
+            print('保存原始拓扑列表')
+            with open(json_path, 'w') as f:
+                json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+        return entity_topo
+
+    def request_multi_entity_topology_v2(self, model_url, ent_id_list, is_load, json_path):
+        """
+        通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
+
+        Args:
+            - did (str): Document ID
+            - wid (str): Workspace ID
+            - eid (str): Element ID
+            - feat_id (str): Feature ID of a sketch or operation
+
+        Returns:
+            - dict: a hierarchical parametric representation
+
+
+            # var q_entity_list = [''' + ",".join([f"\"{fid}\"" for fid in ent_id_list]) + '''];
+
+
+        """
+        body = {
+            'script': '''function(context is Context, queries) {
+            var all_eval_ids = [];
+            var res_list = [];
+            var q_entity_list = [];
+            ''' +
+
+            # 'var entity_list = [' + ','.join([f'\"{fid}\"' for fid in ent_id_list]) + '];' +  # entity_list = ["JDC", "JHS", ...]
+
+            "\n".join(f"""var q_entity{i} = evaluateQuery(context, queries.id{i}); 
+            if (size(q_entity{i}) == 1) {{
+            q_entity_list = append(q_entity_list, q_entity{i}[0]);}}""" for i in range(len(ent_id_list))) +
+
+            '''
+            
+            var entity_num = {};
+            entity_num.n_entity = size(q_entity_list);
+            res_list = append(res_list, entity_num);
+
+            for (var i = 0; i < size(q_entity_list); i+= 1){
+                var q_entity = q_entity_list[i];
+
+                const entity_id = transientQueriesToStrings(q_entity);
+
+                var topo = {};
+                topo.index = i;
+                topo.id = entity_id;
+                topo.faces = [];
+                topo.edges = [];
+                topo.vertices = [];
+
+                var isBody = size(evaluateQuery(context, qEntityFilter(q_entity, EntityType.BODY))) == 1;
+                var isFace = size(evaluateQuery(context, qEntityFilter(q_entity, EntityType.FACE))) == 1;
+                var isEdge = size(evaluateQuery(context, qEntityFilter(q_entity, EntityType.EDGE))) == 1;
+                var isVertex = size(evaluateQuery(context, qEntityFilter(q_entity, EntityType.VERTEX))) == 1;
+
+                if (isFace)
+                {
+                    const face_id = transientQueriesToStrings(q_entity);
+
+                    if (isIn(face_id, all_eval_ids)){continue;}
+                    all_eval_ids = append(all_eval_ids, face_id);
+
+                    topo.entityType = "FACE";
+
+                    var face_topo = {};
+                    face_topo.id = face_id;
+                    face_topo.param = evSurfaceDefinition(context, {face: q_entity});
+                    face_topo.edges = [];
+
+                    var q_edges = evaluateQuery(context, qAdjacent(q_entity, AdjacencyType.EDGE, EntityType.EDGE));
+                    for (var j = 0; j < size(q_edges); j += 1) {
+                        var q_edge = q_edges[j];
+                        const edge_id = transientQueriesToStrings(q_edge);
+                        face_topo.edges = append(face_topo.edges, edge_id);
+
+                        if (isIn(edge_id, all_eval_ids)){continue;}
+                        all_eval_ids = append(all_eval_ids, edge_id);
+
+                        var edge_topo = {};
+                        edge_topo.id = edge_id;
+                        edge_topo.param = evCurveDefinition(context, {edge: q_edge});
+                        edge_topo.vertices = [];
+
+                        var q_vertices = evaluateQuery(context, qAdjacent(q_edge, AdjacencyType.VERTEX, EntityType.VERTEX));
+                        for (var k = 0; k < size(q_vertices); k += 1) {
+                            var q_vertex = q_vertices[k];
+                            const vertex_id = transientQueriesToStrings(q_vertex);
+                            edge_topo.vertices = append(edge_topo.vertices, vertex_id);
+
+                            if (isIn(vertex_id, all_eval_ids)){continue;}
+                            all_eval_ids = append(all_eval_ids, vertex_id);
+
+                            var vertex_topo = {};
+
+                            vertex_topo.id = vertex_id;
+                            vertex_topo.param = evVertexPoint(context, {vertex: q_vertex});
+
+                            topo.vertices = append(topo.vertices, vertex_topo);
+                        }
+
+                        topo.edges = append(topo.edges, edge_topo);
+                    }
+
+                    topo.faces = append(topo.faces, face_topo);
+                }
+
+                else if (isEdge)
+                {
+                    const edge_id = transientQueriesToStrings(q_entity);
+
+                    if (isIn(edge_id, all_eval_ids)){continue;}
+                    all_eval_ids = append(all_eval_ids, edge_id);
+
+                    topo.entityType = "EDGE";
+
+                    var edge_topo = {};
+                    edge_topo.id = edge_id;
+                    edge_topo.param = evCurveDefinition(context, {edge: q_entity});
+                    edge_topo.vertices = [];
+
+                    var q_vertices = evaluateQuery(context, qAdjacent(q_entity, AdjacencyType.VERTEX, EntityType.VERTEX));
+                    for (var k = 0; k < size(q_vertices); k += 1) {
+                        var q_vertex = q_vertices[k];
+                        const vertex_id = transientQueriesToStrings(q_vertex);
+                        edge_topo.vertices = append(edge_topo.vertices, vertex_id);
+
+                        if (isIn(vertex_id, all_eval_ids)){continue;}
+                        all_eval_ids = append(all_eval_ids, vertex_id);
+
+                        var vertex_topo = {};
+
+                        vertex_topo.id = vertex_id;
+                        vertex_topo.param = evVertexPoint(context, {vertex: q_vertex});
+
+                        topo.vertices = append(topo.vertices, vertex_topo);
+                    }
+
+                    topo.edges = append(topo.edges, edge_topo);
+
+                }
+
+                else if (isVertex)
+                {
+                    const vertex_id = transientQueriesToStrings(q_entity);
+
+                    if (isIn(vertex_id, all_eval_ids)){continue;}
+                    all_eval_ids = append(all_eval_ids, vertex_id);
+
+                    topo.entityType = "VERTEX";
+
+                    var vertex_topo = {};
+
+                    vertex_topo.id = vertex_id;
+                    vertex_topo.param = evVertexPoint(context, {vertex: q_entity});
+
+                    topo.vertices = append(topo.vertices, vertex_topo);
+                }
+
+                else if(isBody)
+                {
+                    topo.entityType = "BODY";
+                }
+
+                else
+                {
+                    topo.entityType = "UNKNOWN";
+                }
+
+                res_list = append(res_list, topo);
+
+            }
+            return res_list;
+            }''',
+            "queries": [{"key": f"id{i}", "value": [ent_id]} for i, ent_id in enumerate(ent_id_list)]
+        }
+
+        if is_load:
+            print(f'从文件加载原始拓扑列表: {json_path}')
+            with open(json_path, 'r') as f:
+                entity_topo = json.load(f)
+
+        else:
+            print('从 onshape 请求原始拓扑列表')
+
+            v_list = model_url.split("/")
+            did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+            res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
+                                    body=body)
+
+            entity_topo = res.json()
+
+            print('保存原始拓扑列表')
+            with open(json_path, 'w') as f:
+                json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+        return entity_topo
 
     def eval_bodydetails(self, did, wid, eid):
         """
