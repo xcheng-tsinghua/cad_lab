@@ -102,35 +102,15 @@ def extract_entity_ids(node, out=None):
     return out
 
 
-def parse_onshape_topology(
-        model_url: str = macro.URL,
-        is_load_ofs: bool = True,
-        is_load_topo: bool = True,
-        save_root: str = macro.SAVE_ROOT
-):
+def get_required_entity_id(feat_ofs):
     """
-    解析全部草图和建模操作的拓扑
+    获取全部所需的实体 id美丽如 JDC
+    :param feat_ofs:
     :return:
     """
-    onshape_client = OnshapeClient()
-
-    ofs_path = os.path.join(save_root, 'orig_ofs.json')
-    if is_load_ofs:
-        print(f'从文件加载原始特征列表: {ofs_path}')
-        with open(ofs_path, 'r') as f:
-            ofs = json.load(f)
-    else:
-        print('从 onshape 请求原始特征列表')
-        ofs = onshape_client.request_features(model_url)
-
-        print('保存原始特征列表')
-        with open(ofs_path, 'w') as f:
-            json.dump(ofs, f, ensure_ascii=False, indent=4)
-
-    # 获取全部需要的实体 id
     operation_entity_all = []
     required_geo_list = []
-    for fea_item_ofs in ofs['features']:
+    for fea_item_ofs in feat_ofs['features']:
         fea_type = fea_item_ofs['message']['featureType']
 
         if fea_type == 'newSketch':  # 新草图
@@ -155,29 +135,108 @@ def parse_onshape_topology(
         operation_entity_all.append(operation_entity)
 
     entity_ids_required = list(set(required_geo_list))
+    return operation_entity_all, entity_ids_required
 
-    # # 获取全部的草图和建模操作的 id
+
+def get_feat_id(feat_ofs):
+    """
+    获得全部建模命令的 id，例如草图、拉伸的 id: FcnjNG48IKcdqOW_0
+    :param feat_ofs:
+    :return:
+    """
     all_feat_id = []
-    for i, fea_item_ofs in enumerate(ofs['features']):
+    for i, fea_item_ofs in enumerate(feat_ofs['features']):
         feat_type = fea_item_ofs['message']['featureType']
         feat_id = fea_item_ofs['message']['featureId']
 
         print(f'feat_type: {feat_type}, feat_id: {feat_id}')
         all_feat_id.append(fea_item_ofs['message']['featureId'])
 
-    # 获取全部的草图和建模操作产生的实体的 topology
-    topo_path = os.path.join(save_root, 'operation_topo.json')
-    if is_load_topo:
-        print(f'从文件加载原始拓扑列表: {topo_path}')
-        with open(topo_path, 'r') as f:
-            entity_topo = json.load(f)
-    else:
-        print('从 onshape 请求原始拓扑列表')
-        entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id)
+    return all_feat_id
 
-        print('保存原始拓扑列表')
-        with open(topo_path, 'w') as f:
-            json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+def parse_onshape_topology(
+        model_url: str = macro.URL,
+        is_load_ofs: bool = True,
+        is_load_topo: bool = True,
+        save_root: str = macro.SAVE_ROOT
+):
+    """
+    解析全部草图和建模操作的拓扑
+    :return:
+    """
+    onshape_client = OnshapeClient()
+
+    ofs_path = os.path.join(save_root, 'orig_ofs.json')
+    ofs = onshape_client.request_features(model_url, is_load_ofs, ofs_path)
+    # if is_load_ofs:
+    #     print(f'从文件加载原始特征列表: {ofs_path}')
+    #     with open(ofs_path, 'r') as f:
+    #         ofs = json.load(f)
+    # else:
+    #     print('从 onshape 请求原始特征列表')
+    #     ofs = onshape_client.request_features(model_url)
+    #
+    #     print('保存原始特征列表')
+    #     with open(ofs_path, 'w') as f:
+    #         json.dump(ofs, f, ensure_ascii=False, indent=4)
+
+    # 获取全部需要的实体 id
+    operation_entity_all, entity_ids_required = get_required_entity_id(ofs)
+
+    # operation_entity_all = []
+    # required_geo_list = []
+    # for fea_item_ofs in ofs['features']:
+    #     fea_type = fea_item_ofs['message']['featureType']
+    #
+    #     if fea_type == 'newSketch':  # 新草图
+    #         continue
+    #
+    #     elif fea_type == 'extrude':  # 拉伸
+    #         operation_entity = Extrude.from_ofs(fea_item_ofs)
+    #
+    #     elif fea_type == 'revolve':  # 旋转
+    #         operation_entity = Revolve.from_ofs(fea_item_ofs)
+    #
+    #     elif fea_type == 'sweep':  # 扫描
+    #         operation_entity = Sweep.from_ofs(fea_item_ofs)
+    #
+    #     elif fea_type == 'loft':  # 放样
+    #         operation_entity = Loft.from_ofs(fea_item_ofs)
+    #
+    #     else:    # 圆角、倒角、阵列 ？
+    #         continue
+    #
+    #     required_geo_list.extend(operation_entity.required_geo)
+    #     operation_entity_all.append(operation_entity)
+    #
+    # entity_ids_required = list(set(required_geo_list))
+
+    # # 获取全部的草图和建模操作的 id
+    all_feat_id = get_feat_id(ofs)
+    # for i, fea_item_ofs in enumerate(ofs['features']):
+    #     feat_type = fea_item_ofs['message']['featureType']
+    #     feat_id = fea_item_ofs['message']['featureId']
+    #
+    #     print(f'feat_type: {feat_type}, feat_id: {feat_id}')
+    #     all_feat_id.append(fea_item_ofs['message']['featureId'])
+
+    # 获取全部的草图和建模操作产生的实体的 topology
+    # topo_path = os.path.join(save_root, 'operation_topo.json')
+    # if is_load_topo:
+    #     print(f'从文件加载原始拓扑列表: {topo_path}')
+    #     with open(topo_path, 'r') as f:
+    #         entity_topo = json.load(f)
+    # else:
+    #     print('从 onshape 请求原始拓扑列表')
+    #     entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id)
+    #
+    #     print('保存原始拓扑列表')
+    #     with open(topo_path, 'w') as f:
+    #         json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+    topo_path = os.path.join(save_root, 'operation_topo.json')
+    entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id, is_load_topo, topo_path)
 
     # 获取全部需要的实体 id
     # entity_ids_required = list(set(get_all_entity_ids(ofs)))
@@ -225,11 +284,11 @@ def parse_onshape_topology(
     edge_dict = topology_parser.parse_edge_dict(all_topo_parsed, vert_dict)
 
     # 获取全部区域
-    region_dict = topology_parser.parse_region_dict(all_topo_parsed, edge_dict)
+    face_dict = topology_parser.parse_region_dict(all_topo_parsed, edge_dict)
 
     # 获取绘图元素：
     all_plots = []
-    for _, region in region_dict.items():
+    for _, region in face_dict.items():
         for prim in region.primitive_list:
             sample_list = prim.sample()
             all_plots.append(point_list_to_numpy(sample_list))

@@ -116,7 +116,7 @@ class Client(object):
 
         return self._api.request('post', '/api/assemblies/d/' + did + '/w/' + wid, body=payload)
 
-    def request_features(self, model_url):
+    def request_features(self, model_url, is_load, json_path):
         """
         Gets the feature list for specified document / workspace / part studio.
 
@@ -128,11 +128,25 @@ class Client(object):
         Returns:
             - requests.Response: Onshape response data
         """
-        v_list = model_url.split("/")
-        did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+        if is_load:
+            print(f'从文件加载原始特征列表: {json_path}')
+            with open(json_path, 'r') as f:
+                ofs = json.load(f)
 
-        res = self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/features')
-        return res.json()
+        else:
+            print('从 onshape 请求原始特征列表')
+
+            v_list = model_url.split("/")
+            did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+            res = self._api.request('get', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/features')
+            ofs = res.json()
+
+            print('保存原始特征列表')
+            with open(json_path, 'w') as f:
+                json.dump(ofs, f, ensure_ascii=False, indent=4)
+
+        return ofs
 
     def get_partstudio_tessellatededges(self, did, wid, eid):
         """
@@ -286,7 +300,7 @@ class OnshapeClient(Client):
         res = self._api.request('post', '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript', body=body)
         return res
 
-    def request_multi_feat_topology(self, model_url, fea_id_list):
+    def request_multi_feat_topology(self, model_url, fea_id_list, is_load, json_path):
         """
         通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
 
@@ -381,14 +395,27 @@ class OnshapeClient(Client):
             "queries": []
         }
 
-        v_list = model_url.split("/")
-        did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+        if is_load:
+            print(f'从文件加载原始拓扑列表: {json_path}')
+            with open(json_path, 'r') as f:
+                entity_topo = json.load(f)
 
-        res = self._api.request('post',
-                                '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
-                                body=body)
+        else:
+            print('从 onshape 请求原始拓扑列表')
 
-        return res.json()
+            v_list = model_url.split("/")
+            did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+            res = self._api.request('post',
+                                    '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/featurescript',
+                                    body=body)
+            entity_topo = res.json()
+
+            print('保存原始拓扑列表')
+            with open(json_path, 'w') as f:
+                json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+        return entity_topo
 
     def request_multi_entity_topology(self, model_url, ent_id_list):
         """
