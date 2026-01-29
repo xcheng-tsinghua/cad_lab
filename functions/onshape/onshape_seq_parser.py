@@ -160,7 +160,7 @@ def in_a_not_in_b(a, b):
 def parse_onshape_topology(
         model_url: str = macro.URL,
         is_load_ofs: bool = True,
-        is_load_topo: bool = False,
+        is_load_topo: bool = True,
         save_root: str = macro.SAVE_ROOT
 ):
     """
@@ -173,41 +173,73 @@ def parse_onshape_topology(
     feat_ofs = onshape_client.request_features(model_url, is_load_ofs, os.path.join(save_root, 'feat_ofs.json'))
     # all_feat_id, all_feat_type =
 
+    # 获取全部拓扑
+    all_topo_parsed = {'faces': [], 'regions': [], 'edges': [], 'vertices': []}
+    seq_face = []
+
+    # 全部已解析到的 entity id
+    parsed_entity_id_all = []
+
     request_feat_id = []
     request_times = 0
-    for feat_id, feat_type in zip(get_feat_id(feat_ofs)):
+
+    all_feat_id, all_feat_type = get_feat_id(feat_ofs)
+    print(f'number of all feat: {len(all_feat_id)}.')
+
+    for idx, (feat_id, feat_type) in enumerate(zip(all_feat_id, all_feat_type)):
+    # for idx in enumerate(zip(*get_feat_id(feat_ofs))):
+
         # 对于草图则可以合并到后面的建模操作一起请求，因为草图构建的实体不会被更改
         request_feat_id.append(feat_id)
 
         if feat_type in ('extrude', 'revolve', 'sweep', 'loft', '倒角、圆角、阵列？'):
             # 向服务器请求当前操作下的模型拓扑
-            entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, 2, is_load_topo, os.path.join(save_root, f'operation_topo_{request_times}.json'))
+            entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, idx + 1, is_load_topo, os.path.join(save_root, f'operation_topo_rollback_{request_times}.json'))
+
+            # print(f'processed feat number：{len(request_feat_id)}')
+
+            parsed_entity_id_all.extend(get_all_entity_ids(entity_topo))
+
+            val1st_ofs = entity_topo['result']['message']['value']
+            for val1st_item_ofs in val1st_ofs:
+                topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
+
+                all_topo_parsed['faces'].extend(topo_parsed['faces'])
+                all_topo_parsed['edges'].extend(topo_parsed['edges'])
+                all_topo_parsed['vertices'].extend(topo_parsed['vertices'])
+
+                seq_face.append(topo_parsed['faces'])
+
+                # if feat_type in ('extrude', 'revolve', 'sweep', 'loft'):
+                #     seq_face.append(topo_parsed['faces'])
 
             # 清空需请求的id
             request_times += 1
-            request_feat_id.clear()
+            # request_feat_id.clear()
 
+    required_entity_id = get_required_entity_id(feat_ofs)[1]
 
+    not_parsed = in_a_not_in_b(required_entity_id, parsed_entity_id_all)
 
 
     # 获取逐步获得的几何体列表
     # entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id[: 2], is_load_topo, os.path.join(save_root, 'operation_topo.json'))
-    entity_topo = onshape_client.request_topo_roll_back_to(model_url, all_feat_id[: 2], 2, is_load_topo,
-                                                             os.path.join(save_root, 'operation_topo_rollback2.json'))
+    # entity_topo = onshape_client.request_topo_roll_back_to(model_url, all_feat_id[: 2], 2, is_load_topo,
+    #                                                          os.path.join(save_root, 'operation_topo_rollback2.json'))
 
     # 获取全部拓扑
-    all_topo_parsed = {'faces': [], 'regions': [], 'edges': [], 'vertices': []}
-    seq_face = []
-    val1st_ofs = entity_topo['result']['message']['value']
-    for feat_type, val1st_item_ofs in zip(all_feat_type, val1st_ofs):
-        topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
-
-        all_topo_parsed['faces'].extend(topo_parsed['faces'])
-        all_topo_parsed['edges'].extend(topo_parsed['edges'])
-        all_topo_parsed['vertices'].extend(topo_parsed['vertices'])
-
-        if feat_type in ('extrude', 'revolve', 'sweep', 'loft'):
-            seq_face.append(topo_parsed['faces'])
+    # all_topo_parsed = {'faces': [], 'regions': [], 'edges': [], 'vertices': []}
+    # seq_face = []
+    # val1st_ofs = entity_topo['result']['message']['value']
+    # for feat_type, val1st_item_ofs in zip(all_feat_type, val1st_ofs):
+    #     topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
+    #
+    #     all_topo_parsed['faces'].extend(topo_parsed['faces'])
+    #     all_topo_parsed['edges'].extend(topo_parsed['edges'])
+    #     all_topo_parsed['vertices'].extend(topo_parsed['vertices'])
+    #
+    #     if feat_type in ('extrude', 'revolve', 'sweep', 'loft'):
+    #         seq_face.append(topo_parsed['faces'])
 
     # 获取全部角点
     vert_dict = topology_parser.parse_vert_dict(all_topo_parsed)
@@ -217,6 +249,8 @@ def parse_onshape_topology(
 
     # 获取全部区域
     face_dict = topology_parser.parse_region_dict(all_topo_parsed, edge_dict)
+
+
 
     # 获取绘图元素：
     # all_plots = []

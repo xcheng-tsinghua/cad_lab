@@ -430,7 +430,22 @@ class OnshapeClient(Client):
                         topo.edges = [];
                         topo.vertices = [];
                         
-                        
+                        /* ---------- 0. Regions (regions only) ---------- */  // 区域列表，每个区域仅包含：区域的定义、区域id、该区域下的边id
+                        var q_region = qSketchRegion(makeId(q_arr[l]));
+                        var region_arr = evaluateQuery(context, q_region);
+                        for (var i = 0; i < size(region_arr); i += 1) {
+                           var region_topo = {};
+                           region_topo.id = transientQueriesToStrings(region_arr[i]);  // 区域id
+                           region_topo.edges = [];  // 该区域下的边id
+                           region_topo.param = evSurfaceDefinition(context, {face: region_arr[i]});  // 区域的定义
+                           var q_edge = qAdjacent(region_arr[i], AdjacencyType.EDGE, EntityType.EDGE);
+                           var edge_arr = evaluateQuery(context, q_edge);
+                           for (var j = 0; j < size(edge_arr); j += 1) {
+                               const edge_id = transientQueriesToStrings(edge_arr[j]);
+                               region_topo.edges = append(region_topo.edges, edge_id);
+                           }
+                           topo.faces = append(topo.faces, region_topo);
+                        }
 
                         /* ---------- 1. Face (ALL faces generated) ---------- */
                         var q_face = qCreatedBy(makeId(q_arr[l]), EntityType.FACE);
