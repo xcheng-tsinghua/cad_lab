@@ -207,7 +207,7 @@ def parse_onshape_topology(
     print(f'number of all feat: {len(all_feat_id)}.')
 
     # 获取全部拓扑
-    topo_parsed_all = {'faces': [], 'edges': [], 'vertices': []}
+    topo_parsed_all = {'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
     seq_face = []
 
     # 全部已解析到的 entity id
@@ -218,21 +218,22 @@ def parse_onshape_topology(
         # 对于草图则可以合并到后面的建模操作一起请求，因为草图构建的实体不会被更改
         request_feat_id.append(feat_id)
 
-        if feat_type in ('extrude', 'revolve', 'sweep', 'loft', '倒角、圆角、阵列？'):
-            # 向服务器请求当前操作下的模型拓扑
-            entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, idx + 1, is_load_topo, os.path.join(save_root, f'operation_topo_rollback_{idx}.json'))
+        # if feat_type in ('extrude', 'revolve', 'sweep', 'loft', 'fillet', 'chamfer', 'linearPattern', 'circularPattern', 'draft', 'rib', 'mirror'):
+        # 向服务器请求当前操作下的模型拓扑
+        # 感觉最好还是一个操作请求一次，否则可能遗漏信息，相比节省request，还是弄得完全些
+        entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, idx + 1, is_load_topo, os.path.join(save_root, f'operation_topo_rollback_{idx + 1}.json'))
+        parsed_entity_id_all.extend(extract_entity_ids(entity_topo))
 
-            parsed_entity_id_all.extend(extract_entity_ids(entity_topo))
+        val1st_ofs = entity_topo['result']['message']['value']
+        for val1st_item_ofs in val1st_ofs:
+            topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
 
-            val1st_ofs = entity_topo['result']['message']['value']
-            for val1st_item_ofs in val1st_ofs:
-                topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
+            topo_parsed_all['bodies'].extend(topo_parsed['bodies'])
+            topo_parsed_all['faces'].extend(topo_parsed['faces'])
+            topo_parsed_all['edges'].extend(topo_parsed['edges'])
+            topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
 
-                topo_parsed_all['faces'].extend(topo_parsed['faces'])
-                topo_parsed_all['edges'].extend(topo_parsed['edges'])
-                topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
-
-                seq_face.append(topo_parsed['faces'])
+            seq_face.append(topo_parsed['faces'])
 
     # 获取全部的建模操作参数
     operation_entities = get_operation_entities(feat_ofs)

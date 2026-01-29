@@ -176,7 +176,7 @@ def parse_feat_topo(val2nd_ofs):
 
                 if elem_type == 'param':
                     if val2nd_item_type == 'faces':
-                        v = parse_region_msg(val6th_ofs)
+                        v = parse_face_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'edges':
                         v = parse_edge_msg(val6th_ofs)
@@ -184,10 +184,13 @@ def parse_feat_topo(val2nd_ofs):
                     elif val2nd_item_type == 'vertices':
                         v = parse_vertex_msg(val6th_ofs)
 
+                    # elif val2nd_item_type == 'bodies':
+                    #     v = parse_body_msg(val6th_ofs)
+
                     else:
                         raise NotImplementedError(f'elem not supported: {val2nd_item_type}')
 
-                elif elem_type in ('vertices', 'edges'):
+                elif elem_type in ('vertices', 'edges', 'faces'):
                     v = parse_last_id(val6th_ofs['message']['value'])
 
                 elif elem_type == 'id':
@@ -208,7 +211,37 @@ def parse_feat_topo(val2nd_ofs):
     return topo
 
 
-def parse_region_msg(val6th_ofs):
+def parse_body_msg(val6th_ofs):
+    """
+    实体只保存 id、边界的 id
+    """
+    val7th_ofs = val6th_ofs['message']['value']
+    # face_param = {'typeTag': val6th_ofs['message']['typeTag']}
+    face_param = {}
+
+    for val7th_item_ofs in val7th_ofs:
+        k = val7th_item_ofs['message']['key']['message']['value']
+        val9th_ofs = val7th_item_ofs['message']['value']['message']['value']
+
+        if k == 'coordSystem':
+            v = parse_coord_msg(val9th_ofs)
+
+        elif k in ('normal', 'origin', 'x'):
+            v = parse_last_msg_val_list(val9th_ofs)
+
+        elif k in ('surfaceType', ):
+            v = val9th_ofs
+
+        else:
+            warn(f'not considered key occurred: {k}, save directly')
+            v = val9th_ofs
+
+        face_param[k] = v
+
+    return face_param
+
+
+def parse_face_msg(val6th_ofs):
     """
     区域只保存 id、所在面定义、边界的 id
     """

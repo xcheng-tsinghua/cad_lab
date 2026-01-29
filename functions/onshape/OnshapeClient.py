@@ -426,6 +426,7 @@ class OnshapeClient(Client):
                 '''
                     for (var l = 0; l < size(q_arr); l+= 1){
                         var topo = {};
+                        topo.bodies = [];
                         topo.faces = [];
                         topo.edges = [];
                         topo.vertices = [];
@@ -445,6 +446,22 @@ class OnshapeClient(Client):
                                region_topo.edges = append(region_topo.edges, edge_id);
                            }
                            topo.faces = append(topo.faces, region_topo);
+                        }
+                        
+                        /* ---------- 1. Body (ALL bodies generated) ---------- */
+                        var q_body = qCreatedBy(makeId(q_arr[l]), EntityType.BODY);
+                        var body_arr = evaluateQuery(context, q_body);
+                        for (var i = 0; i < size(body_arr); i += 1) {
+                            var body_topo = {};
+                            body_topo.id = transientQueriesToStrings(body_arr[i]);
+                            body_topo.faces = [];
+                            var q_face = qOwnedByBody(body_arr[i], EntityType.FACE);
+                            var face_arr = evaluateQuery(context, q_face);
+                            for (var j = 0; j < size(face_arr); j += 1) {
+                                const face_id = transientQueriesToStrings(face_arr[j]);
+                                body_topo.faces = append(body_topo.faces, face_id);
+                            }
+                            topo.bodies = append(topo.bodies, body_topo);
                         }
 
                         /* ---------- 1. Face (ALL faces generated) ---------- */
