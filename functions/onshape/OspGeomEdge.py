@@ -294,12 +294,12 @@ class OspBSpline(object):
         return points_osp
 
 
-class OspRegion(object):
+class OspFace(object):
     """
     一个草图可能存在多个区域，拉伸、旋转等都是选中区域进行操作
     """
-    def __init__(self, primitive_list: list, topo_id: str):
+    def __init__(self, edges: list, topo_id: str):
         self.id = topo_id
-        self.primitive_list = primitive_list
+        self.edges = edges
 
 

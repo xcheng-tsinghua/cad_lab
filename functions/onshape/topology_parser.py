@@ -3,7 +3,7 @@
 """
 
 from functions.onshape.OspGeomBase import OspPoint, OspCoordSystem
-from functions.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspRegion
+from functions.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
 from functions.onshape import utils, macro
 from warnings import warn
 
@@ -118,7 +118,7 @@ def parse_edge_dict(sketch_topology, vert_dict):
     return edge_dict
 
 
-def parse_region_dict(sketch_topology, edge_dict):
+def parse_face_dict(sketch_topology, edge_dict):
     """
     将草图拓扑转化为区域
     :param sketch_topology:
@@ -129,7 +129,7 @@ def parse_region_dict(sketch_topology, edge_dict):
     region_dict = {}
     for region_topo_item in sketch_topology['faces']:
         region_edge_list = [edge_dict[edge_id] for edge_id in region_topo_item['edges']]
-        region_parsed = OspRegion(region_edge_list, region_topo_item['id'])
+        region_parsed = OspFace(region_edge_list, region_topo_item['id'])
 
         region_dict[region_topo_item['id']] = region_parsed
 
@@ -171,7 +171,7 @@ def parse_feat_topo(val2nd_ofs):
 
             for val5th_item_ofs in val5th_ofs:
                 # val5th_ofs: 每个元素代表 face、edge、vert 的一个具体属性，例如 id，坐标系等
-                elem_type = val5th_item_ofs['message']['key']['message']['value']  # ['id', 'regions',  'edges', 'vertices']
+                elem_type = val5th_item_ofs['message']['key']['message']['value']  # ['id', 'faces',  'edges', 'vertices']
                 val6th_ofs = val5th_item_ofs['message']['value']
 
                 if elem_type == 'param':
