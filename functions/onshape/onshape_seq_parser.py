@@ -129,20 +129,38 @@ def get_feat_id(feat_ofs):
     :return:
     """
     all_feat_id = []
+    all_feat_type = []
     for i, fea_item_ofs in enumerate(feat_ofs['features']):
         feat_type = fea_item_ofs['message']['featureType']
         feat_id = fea_item_ofs['message']['featureId']
 
         print(f'feat_type: {feat_type}, feat_id: {feat_id}')
+
+        # if feat_type in ('extrude', 'revolve', 'sweep', 'loft'):
         all_feat_id.append(fea_item_ofs['message']['featureId'])
 
-    return all_feat_id
+        all_feat_type.append(feat_type)
+
+    return all_feat_id, all_feat_type
+
+
+def in_a_not_in_b(a, b):
+    """
+    找出在数组 a 中存在但不在 b 中存在的值
+    :param a:
+    :param b:
+    :return:
+    """
+    a = set(a)
+    b = set(b)
+    diff_a = list(a - b)
+    return diff_a
 
 
 def parse_onshape_topology(
         model_url: str = macro.URL,
         is_load_ofs: bool = True,
-        is_load_topo: bool = True,
+        is_load_topo: bool = False,
         save_root: str = macro.SAVE_ROOT
 ):
     """
@@ -152,26 +170,44 @@ def parse_onshape_topology(
     onshape_client = OnshapeClient()
 
     # 获取最初的操作特征列表
-    feat_ofs_path = os.path.join(save_root, 'feat_ofs.json')
-    feat_ofs = onshape_client.request_features(model_url, is_load_ofs, feat_ofs_path)
-    all_feat_id = get_feat_id(feat_ofs)
+    feat_ofs = onshape_client.request_features(model_url, is_load_ofs, os.path.join(save_root, 'feat_ofs.json'))
+    # all_feat_id, all_feat_type =
+
+    request_feat_id = []
+    request_times = 0
+    for feat_id, feat_type in zip(get_feat_id(feat_ofs)):
+        # 对于草图则可以合并到后面的建模操作一起请求，因为草图构建的实体不会被更改
+        request_feat_id.append(feat_id)
+
+        if feat_type in ('extrude', 'revolve', 'sweep', 'loft', '倒角、圆角、阵列？'):
+            # 向服务器请求当前操作下的模型拓扑
+            entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, 2, is_load_topo, os.path.join(save_root, f'operation_topo_{request_times}.json'))
+
+            # 清空需请求的id
+            request_times += 1
+            request_feat_id.clear()
+
+
+
 
     # 获取逐步获得的几何体列表
-    topo_path = os.path.join(save_root, 'operation_topo.json')
-    entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id, is_load_topo, topo_path)
+    # entity_topo = onshape_client.request_multi_feat_topology(model_url, all_feat_id[: 2], is_load_topo, os.path.join(save_root, 'operation_topo.json'))
+    entity_topo = onshape_client.request_topo_roll_back_to(model_url, all_feat_id[: 2], 2, is_load_topo,
+                                                             os.path.join(save_root, 'operation_topo_rollback2.json'))
 
     # 获取全部拓扑
     all_topo_parsed = {'faces': [], 'regions': [], 'edges': [], 'vertices': []}
     seq_face = []
     val1st_ofs = entity_topo['result']['message']['value']
-    for val1st_item_ofs in val1st_ofs:
+    for feat_type, val1st_item_ofs in zip(all_feat_type, val1st_ofs):
         topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
 
         all_topo_parsed['faces'].extend(topo_parsed['faces'])
         all_topo_parsed['edges'].extend(topo_parsed['edges'])
         all_topo_parsed['vertices'].extend(topo_parsed['vertices'])
 
-        seq_face.append(topo_parsed['faces'])
+        if feat_type in ('extrude', 'revolve', 'sweep', 'loft'):
+            seq_face.append(topo_parsed['faces'])
 
     # 获取全部角点
     vert_dict = topology_parser.parse_vert_dict(all_topo_parsed)

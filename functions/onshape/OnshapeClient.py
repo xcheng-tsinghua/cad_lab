@@ -355,7 +355,7 @@ class OnshapeClient(Client):
                             edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});
                             
                             // obtain the midpoint of the edge
-                            var midpoint = evEdgeTangentLine(context, {edge: edge_arr[j], \"parameter\": 0.5 }).origin;
+                            var midpoint = evEdgeTangentLine(context, {edge: edge_arr[j], parameter: 0.5 }).origin;
                             edge_topo.midpoint = midpoint;
                             
                             var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);
@@ -404,6 +404,139 @@ class OnshapeClient(Client):
             print('保存原始拓扑列表')
             with open(json_path, 'w') as f:
                 json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+        return entity_topo
+
+    def request_topo_roll_back_to(self, model_url, feat_id_list, roll_back_index, is_load, json_path):
+        """
+        获取回滚到某个建模步骤前的模型拓扑
+        :param model_url:
+        :param feat_id_list:
+        :param roll_back_index:
+        :param is_load:
+        :param json_path:
+        :return:
+        """
+        body = {
+            "script":
+                '''
+                function(context is Context, queries) { 
+                    var res_list = [];
+                    var q_arr = [''' + ",".join([f"\"{fid}\"" for fid in feat_id_list]) + "];" +
+                '''
+                    for (var l = 0; l < size(q_arr); l+= 1){
+                        var topo = {};
+                        topo.faces = [];
+                        topo.edges = [];
+                        topo.vertices = [];
+                        
+                        
+
+                        /* ---------- 1. Face (ALL faces generated) ---------- */
+                        var q_face = qCreatedBy(makeId(q_arr[l]), EntityType.FACE);
+                        var face_arr = evaluateQuery(context, q_face);
+                        for (var i = 0; i < size(face_arr); i += 1) {
+                            var face_topo = {};
+                            face_topo.id = transientQueriesToStrings(face_arr[i]);
+                            face_topo.edges = [];
+                            face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});
+                            var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);
+                            var edge_arr = evaluateQuery(context, q_edge);
+                            for (var j = 0; j < size(edge_arr); j += 1) {
+                                const edge_id = transientQueriesToStrings(edge_arr[j]);
+                                face_topo.edges = append(face_topo.edges, edge_id);
+                            }
+                            topo.faces = append(topo.faces, face_topo);
+                        }
+
+                        /* ---------- 2. Edges (ALL sketch edges, open or closed) ---------- */
+                        var q_edge = qCreatedBy(makeId(q_arr[l]), EntityType.EDGE);
+                        var edge_arr = evaluateQuery(context, q_edge);
+                        for (var j = 0; j < size(edge_arr); j += 1) {
+                            var edge_topo = {};
+                            const edge_id = transientQueriesToStrings(edge_arr[j]);
+                            edge_topo.id = edge_id;
+                            edge_topo.vertices = [];
+                            edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});
+
+                            // obtain the midpoint of the edge
+                            var midpoint = evEdgeTangentLine(context, {edge: edge_arr[j], parameter: 0.5 }).origin;
+                            edge_topo.midpoint = midpoint;
+
+                            var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);
+                            var vertex_arr = evaluateQuery(context, q_vertex);
+                            for (var k = 0; k < size(vertex_arr); k += 1) {
+                                const vertex_id = transientQueriesToStrings(vertex_arr[k]);
+                                edge_topo.vertices = append(edge_topo.vertices, vertex_id);
+                            }
+                            topo.edges = append(topo.edges, edge_topo);                                                           
+                        }
+
+                       /* ---------- 3. Vertices (ALL sketch vertices) ---------- */
+                        var q_vertex = qCreatedBy(makeId(q_arr[l]), EntityType.VERTEX);
+                        var vertex_arr = evaluateQuery(context, q_vertex);
+                        for (var k = 0; k < size(vertex_arr); k += 1) {
+                            var vertex_topo = {};
+                            const vertex_id = transientQueriesToStrings(vertex_arr[k]);
+                            vertex_topo.id = vertex_id;
+                            vertex_topo.param = evVertexPoint(context, {vertex: vertex_arr[k]});
+                            topo.vertices = append(topo.vertices, vertex_topo);
+                        }
+                        res_list = append(res_list, topo);
+                    }
+                    return res_list;
+                }
+                ''',
+            "queries": []
+        }
+
+        if is_load:
+            print(f'从文件加载原始拓扑列表: {json_path}')
+            with open(json_path, 'r') as f:
+                entity_topo = json.load(f)
+
+        else:
+            print('从 onshape 请求原始拓扑列表')
+
+            v_list = model_url.split("/")
+            did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+            res = self._api.request('post',
+                                    '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + f'/featurescript',
+                                    {'rollbackBarIndex': roll_back_index},
+                                    body=body)
+            entity_topo = res.json()
+
+            print('保存原始拓扑列表')
+            with open(json_path, 'w') as f:
+                json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+        return entity_topo
+
+    def request_set_roll_back_to(self, model_url, roll_back_index: int):
+        """
+        将建模历史回滚到索引为roll_back_index的特征之前，索引从0开始
+
+        Args:
+            - did (str): Document ID
+            - wid (str): Workspace ID
+            - eid (str): Element ID
+            - feat_id (str): Feature ID of a sketch or operation
+
+        Returns:
+            - dict: a hierarchical parametric representation
+        """
+
+        body = {"rollbackIndex": roll_back_index}
+
+        v_list = model_url.split("/")
+        did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+        res = self._api.request('post',
+                                '/api/partstudios/d/' + did + '/w/' + wid + '/e/' + eid + '/features/rollback',
+                                body=body)
+        entity_topo = res.json()
+        print(entity_topo)
 
         return entity_topo
 
