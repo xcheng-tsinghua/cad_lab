@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from functions.onshape import macro
 from functions.onshape.OspGeomBase import point_list_to_numpy
 from functions.onshape.OperationParser import Extrude, Revolve, Sweep, Loft
+from colorama import Fore, Back, Style
 
 
 def plot_3d_sketch(sample_list):
@@ -189,8 +190,8 @@ def in_a_not_in_b(a, b):
 
 def parse_onshape_topology(
         model_url: str = macro.URL,
-        is_load_ofs: bool = True,
-        is_load_topo: bool = True,
+        is_load_ofs: bool = False,
+        is_load_topo: bool = False,
         save_root: str = macro.SAVE_ROOT
 ):
     """
