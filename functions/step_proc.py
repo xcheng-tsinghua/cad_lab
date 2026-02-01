@@ -1130,44 +1130,51 @@ def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers, with
     :param with_cst: 生成的点云是否包含约束
     :return:
     """
+    # 以文件夹为单位进行处理，防止中断后要从头再来
+    # 获取全部文件夹
+    leaf_dirs = utils.get_leaf_dirs(source_dir)
 
-    # 清空target_dir
-    if os.path.exists(target_dir):
-        n_files_exist = len(utils.get_allfiles(target_dir, None))
-        response = input(f'target folder exist {n_files_exist} files, clear this folder? (y/n) ')
-        if response != 'y':
-            exit()
+    for dir_idx, source_leaf_dir in enumerate(leaf_dirs):
+        files_all = utils.get_allfiles(source_leaf_dir, 'step')
+        target_leaf_dir = source_leaf_dir.replace(source_dir, target_dir)
+        print(f'{dir_idx}/{len(leaf_dirs)}: process dir: {source_leaf_dir}, save to: {target_leaf_dir}, n_step: {len(files_all)}')
 
-        print('clear dir: ', target_dir)
-        shutil.rmtree(target_dir)
+        # 清空target_dir
+        if os.path.exists(target_leaf_dir):
+            n_files_exist = len(utils.get_allfiles(target_leaf_dir, None))
+            response = input(f'target folder exist {n_files_exist} files, clear this folder? (y/n) ')
+            if response != 'y':
+                exit()
 
-    # 先在 target_path 下创建相同的目录结构
-    print('create tree like:', source_dir)
-    utils.create_tree_like(source_dir, target_dir)
-    files_all = utils.get_allfiles(source_dir, 'step')
+            print('clear dir: ', target_leaf_dir)
+            shutil.rmtree(target_leaf_dir)
 
-    work_func = partial(
-        step2pcd_batched_multi_processing_wrapper,
-        source_dir=source_dir,
-        target_dir=target_dir,
-        n_points=n_points,
-        deflection=deflection,
-        with_cst=with_cst
-    )
+        # 先在 target_path 下创建相同的目录结构
+        print('create tree like:', source_leaf_dir)
+        utils.create_tree_like(source_leaf_dir, target_leaf_dir)
 
-    if workers <= 1:
-        print('not using multiprocessing')
-        for step_file in tqdm(files_all):
-            work_func(step_file)
+        work_func = partial(
+            step2pcd_batched_multi_processing_wrapper,
+            source_dir=source_leaf_dir,
+            target_dir=target_leaf_dir,
+            n_points=n_points,
+            deflection=deflection,
+            with_cst=with_cst
+        )
 
-    else:
-        print(f'using multiprocessing with workers {workers}')
-        with Pool(processes=workers) as pool:
-            _ = list(tqdm(
-                pool.imap(work_func, files_all),
-                total=len(files_all),
-                desc='STEP to point cloud')
-            )
+        if workers <= 1:
+            print('not using multiprocessing')
+            for step_file in tqdm(files_all):
+                work_func(step_file)
+
+        else:
+            print(f'using multiprocessing with workers {workers}')
+            with Pool(processes=workers) as pool:
+                _ = list(tqdm(
+                    pool.imap(work_func, files_all),
+                    total=len(files_all),
+                    desc='STEP to point cloud')
+                )
 
 
 def step2pcd_batched_(dir_path, n_points=2000, deflection=0.1, xyz_only=False):

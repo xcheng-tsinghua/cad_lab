@@ -67,6 +67,21 @@ def get_subdirs(dir_path):
     return dir_names
 
 
+def get_leaf_dirs(dir_path):
+    """
+    获取某个文件夹下的全部叶节点（没有子文件夹的文件夹）
+    :param dir_path:
+    :return:
+    """
+    leaf_dirs = []
+
+    for current_path, dir_names, file_names in os.walk(dir_path):
+        if not dir_names:  # 没有子文件夹
+            leaf_dirs.append(current_path)
+
+    return leaf_dirs
+
+
 def create_subdirs(dir_path, sub_names: list):
     """
     在 dir_path 下创建多个一级子文件夹
