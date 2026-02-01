@@ -183,7 +183,7 @@ class PointOfParamPCD(gp_Pnt):
         """
         self.nor = normal_at(self, self.aligned_face)
 
-    def get_save_str(self, is_contain_xyz=True):
+    def get_save_str(self):
         # if is_contain_xyz:
         save_str = (f'{self.X():.6f} {self.Y():.6f} {self.Z():.6f} ' +  # 坐标
                     f'{self.pmt:d} ' +  # 基元类型
@@ -1132,35 +1132,19 @@ def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers, with
     """
 
     # 清空target_dir
-    n_files_exist = len(utils.get_allfiles(target_dir, None))
-    response = input(f'target folder exist {n_files_exist} files, clear this folder? (y/n) ')
-    if response != 'y':
-        exit()
+    if os.path.exists(target_dir):
+        n_files_exist = len(utils.get_allfiles(target_dir, None))
+        response = input(f'target folder exist {n_files_exist} files, clear this folder? (y/n) ')
+        if response != 'y':
+            exit()
 
-    print('clear dir: ', target_dir)
-    shutil.rmtree(target_dir)
+        print('clear dir: ', target_dir)
+        shutil.rmtree(target_dir)
 
     # 先在 target_path 下创建相同的目录结构
     print('create tree like:', source_dir)
     utils.create_tree_like(source_dir, target_dir)
     files_all = utils.get_allfiles(source_dir, 'step')
-
-    # 获取全部点云保存路径
-    # save_all = []
-    # for c_file in files_all:
-    #     c_file = c_file.replace(source_dir, target_dir)
-    #     c_save = os.path.splitext(c_file)[0] + '.txt'
-    #     save_all.append(c_save)
-
-    # work_func = partial(
-    #     step2pcd,
-    #     n_points=n_points,
-    #     deflection=deflection,
-    #     xyz_only=False,
-    #     using_tqdm=False,
-    #     print_log=False,
-    #     is_normalize=True
-    # )
 
     work_func = partial(
         step2pcd_batched_multi_processing_wrapper,
@@ -1171,12 +1155,19 @@ def step2pcd_batched(source_dir, target_dir, n_points, deflection, workers, with
         with_cst=with_cst
     )
 
-    with Pool(processes=workers) as pool:
-        _ = list(tqdm(
-            pool.imap(work_func, files_all),
-            total=len(files_all),
-            desc='STEP to point cloud')
-        )
+    if workers <= 1:
+        print('not using multiprocessing')
+        for step_file in tqdm(files_all):
+            work_func(step_file)
+
+    else:
+        print(f'using multiprocessing with workers {workers}')
+        with Pool(processes=workers) as pool:
+            _ = list(tqdm(
+                pool.imap(work_func, files_all),
+                total=len(files_all),
+                desc='STEP to point cloud')
+            )
 
 
 def step2pcd_batched_(dir_path, n_points=2000, deflection=0.1, xyz_only=False):
@@ -1389,8 +1380,8 @@ def test():
 
 
 if __name__ == '__main__':
-    step_file = r'C:\Users\ChengXi\Desktop\cstnet2\cube_div.STEP'
-    assign_merged_prim_index(step_file)
+    t_step_file = r'C:\Users\ChengXi\Desktop\cstnet2\cube_div.STEP'
+    assign_merged_prim_index(t_step_file)
 
 
 

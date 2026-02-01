@@ -607,12 +607,12 @@ def test_onshape_parser():
     # od.test()
 
 
-def vis_cst_pcd():
+def vis_cst_pcd_folder(target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2'):
     """
     可视化某个文件夹下的带约束的点云
     :return:
     """
-    target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train'
+
 
     # 获取全部文件
     all_pcd = utils.get_allfiles(target_dir)
@@ -709,10 +709,12 @@ if __name__ == '__main__':
     # ashape_occ = step_proc.normalize_shape_to_unit_cube(ashape_occ)
     # step_proc.shapeocc2step(ashape_occ, r'C:\Users\ChengXi\Desktop\cstnet2\comb---2.STEP')
 
-    # step_proc.step2pcd_batched(r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2', 2000, 1e-4, 8)
+    step_proc.step2pcd_batched(r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2', 2000, 1e-4, 0)
     # process_cannot_convert()
     # print(os.path.splitext(stepfile))
     # del_except()
+
+    # step_proc.step2pcd(r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP\train\Num5\trans9261.STEP', r'C:\Users\ChengXi\Desktop\fig\transed_pcd.txt')
 
     # upper_funcs.remove_png_white_pixel_batched(r'C:\Users\ChengXi\Desktop\fig\tvcg_rev', remove_pixel=(240,240,240))
     # upper_funcs.remove_png_white_pixel_batched(
@@ -734,11 +736,11 @@ if __name__ == '__main__':
 
     # test_deepcad_onshape_parser()4R2437.txt
 
-    # vis_cst_pcd()
+    # vis_cst_pcd_folder()
     # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
     # vis_pcd_gen()
 
-    test_onshape_parser()
+    # test_onshape_parser()
 
 
     pass

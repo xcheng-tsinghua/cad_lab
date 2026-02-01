@@ -527,7 +527,195 @@ class OnshapeClient(object):
 
         return entity_topo
 
-    def request_set_roll_back_to(self, model_url, roll_back_index: int):
+    def request_topo_roll_back_to_with_details(self, model_url, feat_id_list, roll_back_index, is_load, json_path):
+        """
+        获取回滚到某个建模步骤前的模型拓扑，对于面而言额外获取
+            p_range
+            p_curve
+            outer_loop
+            inner_loop
+            topology_normal
+
+        :param model_url:
+        :param feat_id_list:
+        :param roll_back_index:
+        :param is_load:
+        :param json_path:
+        :return:
+        """
+        body = {
+            "script":
+                '''
+                function(context is Context, queries) { 
+                    var res_list = [];
+                    var q_arr = [''' + ",".join([f"\"{fid}\"" for fid in feat_id_list]) + "];" +
+                '''
+                    for (var l = 0; l < size(q_arr); l+= 1){
+                        var topo = {};
+                        topo.bodies = [];
+                        topo.faces = [];
+                        topo.edges = [];
+                        topo.vertices = [];
+
+                        /* ---------- 0. Regions (regions only) ---------- */  // 区域列表，每个区域仅包含：区域的定义、区域id、该区域下的边id
+                        var q_region = qSketchRegion(makeId(q_arr[l]));
+                        var region_arr = evaluateQuery(context, q_region);
+                        for (var i = 0; i < size(region_arr); i += 1) {
+                           var region_topo = {};
+                           region_topo.id = transientQueriesToStrings(region_arr[i]);  // 区域id
+                           region_topo.edges = [];  // 该区域下的边id
+                           region_topo.param = evSurfaceDefinition(context, {face: region_arr[i]});  // 区域的定义
+                           var q_edge = qAdjacent(region_arr[i], AdjacencyType.EDGE, EntityType.EDGE);
+                           var edge_arr = evaluateQuery(context, q_edge);
+                           for (var j = 0; j < size(edge_arr); j += 1) {
+                               const edge_id = transientQueriesToStrings(edge_arr[j]);
+                               region_topo.edges = append(region_topo.edges, edge_id);
+                           }
+                           topo.faces = append(topo.faces, region_topo);
+                        }
+
+                        /* ---------- 1. Body (ALL bodies generated) ---------- */
+                        var q_body = qCreatedBy(makeId(q_arr[l]), EntityType.BODY);
+                        var body_arr = evaluateQuery(context, q_body);
+                        for (var i = 0; i < size(body_arr); i += 1) {
+                            var body_topo = {};
+                            body_topo.id = transientQueriesToStrings(body_arr[i]);
+                            body_topo.faces = [];
+                            var q_face = qOwnedByBody(body_arr[i], EntityType.FACE);
+                            var face_arr = evaluateQuery(context, q_face);
+                            for (var j = 0; j < size(face_arr); j += 1) {
+                                const face_id = transientQueriesToStrings(face_arr[j]);
+                                body_topo.faces = append(body_topo.faces, face_id);
+                            }
+                            topo.bodies = append(topo.bodies, body_topo);
+                        }
+
+                        /* ---------- 1. Face (ALL faces generated) ---------- */
+                        var face_arr = evaluateQuery(context, qCreatedBy(makeId(q_arr[l]), EntityType.FACE));
+                        for (var i = 0; i < size(face_arr); i += 1) {
+                            var faceQ = face_arr[i]
+                            var face_topo = {};
+                            
+                            // face id
+                            face_topo.id = transientQueriesToStrings(faceQ);
+                            
+                            // face parametric function
+                            face_topo.param = evSurfaceDefinition(context, {face: faceQ});
+                            
+                            // ---------- 01. Outer Loop ----------
+                            face_topo.outerLoops = [];
+                            var outerLoops = evaluateQuery(context, qFaceOuterLoop(faceQ));
+                            
+                            // Loop over outer loop (should be 1 usually)
+                            for (var oi = 0; oi < size(outerLoops); oi += 1){
+                            
+                                var loopTopo = {};
+                                loopTopo.edges = [];
+                                var edges = evaluateQuery(context, qLoopEdges(outerLoops[oi]));
+                                
+                                for (var e = 0; e < size(edges); e += 1)
+                                {
+                                    var edgeQ = edges[e];
+                                    loopTopo.edges = append(loopTopo.edges, {
+                                        "id": transientQueriesToStrings(edgeQ),
+                                        "pCurve": evPCurveDefinition(context, {edge: edgeQ, face: faceQ}), 
+                                        "reversed": isQueryReversedInLoop(edgeQ, outerLoops[oi])
+                                    });
+                                }
+                                
+                                face_topo.outerLoops = append(face_topo.outerLoops, loopTopo);
+                            }
+                            
+                            // ---------- 02. Inner Loops ----------
+                            face_topo.innerLoops = [];
+                            var innerLoops = evaluateQuery(context, qFaceInnerLoop(faceQ));
+
+                            for (var ii = 0; ii < size(innerLoops); ii += 1){
+                            
+                                var loopTopo = {};
+                                loopTopo.edges = [];
+                                var edges_inner = evaluateQuery(context, qLoopEdges(innerLoops[ii]));
+                                
+                                for (var je2 = 0; je2 < size(edges_inner); je2 += 1)
+                                {
+                                    var edgeInQ = edges_inner[je2];
+                                    loopTopo.edges = append(loopTopo.edges, {
+                                        "id": transientQueriesToStrings(edgeInQ),
+                                        "pCurve": evPCurveDefinition(context, {edge: edgeInQ, face: faceQ}), 
+                                        "reversed": isQueryReversedInLoop(edgeInQ, innerLoops[ii])
+                                    });
+                                }
+                                
+                                face_topo.innerLoops = append(face_topo.innerLoops, loopTopo);
+                            }
+                            
+                            topo.faces = append(topo.faces, face_topo);
+                        }
+
+                        /* ---------- 2. Edges (ALL sketch edges, open or closed) ---------- */
+                        var q_edge = qCreatedBy(makeId(q_arr[l]), EntityType.EDGE);
+                        var edge_arr = evaluateQuery(context, q_edge);
+                        for (var j = 0; j < size(edge_arr); j += 1) {
+                            var edge_topo = {};
+                            const edge_id = transientQueriesToStrings(edge_arr[j]);
+                            edge_topo.id = edge_id;
+                            edge_topo.vertices = [];
+                            edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});
+
+                            // obtain the midpoint of the edge
+                            var midpoint = evEdgeTangentLine(context, {edge: edge_arr[j], parameter: 0.5 }).origin;
+                            edge_topo.midpoint = midpoint;
+
+                            var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);
+                            var vertex_arr = evaluateQuery(context, q_vertex);
+                            for (var k = 0; k < size(vertex_arr); k += 1) {
+                                const vertex_id = transientQueriesToStrings(vertex_arr[k]);
+                                edge_topo.vertices = append(edge_topo.vertices, vertex_id);
+                            }
+                            topo.edges = append(topo.edges, edge_topo);                                                           
+                        }
+
+                       /* ---------- 3. Vertices (ALL sketch vertices) ---------- */
+                        var q_vertex = qCreatedBy(makeId(q_arr[l]), EntityType.VERTEX);
+                        var vertex_arr = evaluateQuery(context, q_vertex);
+                        for (var k = 0; k < size(vertex_arr); k += 1) {
+                            var vertex_topo = {};
+                            const vertex_id = transientQueriesToStrings(vertex_arr[k]);
+                            vertex_topo.id = vertex_id;
+                            vertex_topo.param = evVertexPoint(context, {vertex: vertex_arr[k]});
+                            topo.vertices = append(topo.vertices, vertex_topo);
+                        }
+                        res_list = append(res_list, topo);
+                    }
+                    return res_list;
+                }
+                ''',
+            "queries": []
+        }
+
+        if is_load:
+            print(Fore.GREEN + f'从文件加载原始拓扑列表: {json_path}' + Style.RESET_ALL)
+            with open(json_path, 'r') as f:
+                entity_topo = json.load(f)
+
+        else:
+            print(Fore.CYAN + '从 onshape 请求原始拓扑列表' + Style.RESET_ALL)
+
+            v_list = model_url.split("/")
+            did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+            res = self._api.request('post',
+                                    f'/api/partstudios/d/{did}/w/{wid}/e/{eid}/featurescript',
+                                    {'rollbackBarIndex': roll_back_index}, body=body)
+            entity_topo = res.json()
+
+            print(Fore.CYAN + '保存原始拓扑列表' + Style.RESET_ALL)
+            with open(json_path, 'w') as f:
+                json.dump(entity_topo, f, ensure_ascii=False, indent=4)
+
+        return entity_topo
+
+    def request_render_roll_back_to(self, model_url, roll_back_index: int):
         """
         将建模历史回滚到索引为roll_back_index的特征之前，索引从0开始
 
@@ -556,20 +744,6 @@ class OnshapeClient(object):
     def request_multi_entity_topology(self, model_url, ent_id_list, is_load, json_path):
         """
         通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
-
-        Args:
-            - did (str): Document ID
-            - wid (str): Workspace ID
-            - eid (str): Element ID
-            - feat_id (str): Feature ID of a sketch or operation
-
-        Returns:
-            - dict: a hierarchical parametric representation
-
-
-            # var q_entity_list = [''' + ",".join([f"\"{fid}\"" for fid in ent_id_list]) + '''];
-
-
         """
         body = {
             'script': '''function(context is Context, queries) {
@@ -761,20 +935,6 @@ class OnshapeClient(object):
     def request_multi_entity_topology_v2(self, model_url, ent_id_list, is_load, json_path):
         """
         通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
-
-        Args:
-            - did (str): Document ID
-            - wid (str): Workspace ID
-            - eid (str): Element ID
-            - feat_id (str): Feature ID of a sketch or operation
-
-        Returns:
-            - dict: a hierarchical parametric representation
-
-
-            # var q_entity_list = [''' + ",".join([f"\"{fid}\"" for fid in ent_id_list]) + '''];
-
-
         """
         body = {
             'script': '''function(context is Context, queries) {
