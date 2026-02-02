@@ -5,7 +5,7 @@ import shutil
 import numpy as np
 
 from utils import vis, utils
-from functions import step_proc, img_proc
+from functions import step_proc, img_proc, brep
 from functions.onshape import onshape_seq_parser
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -709,7 +709,7 @@ if __name__ == '__main__':
     # ashape_occ = step_proc.normalize_shape_to_unit_cube(ashape_occ)
     # step_proc.shapeocc2step(ashape_occ, r'C:\Users\ChengXi\Desktop\cstnet2\comb---2.STEP')
 
-    step_proc.step2pcd_batched(r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2', 2000, 1e-4, 8)
+    # step_proc.step2pcd_batched(r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP', r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2', 2000, 1e-4, 8)
     # process_cannot_convert()
     # print(os.path.splitext(stepfile))
     # del_except()
@@ -741,7 +741,7 @@ if __name__ == '__main__':
     # vis_pcd_gen()
 
     # test_onshape_parser()
-
+    brep.test_construct()
 
     pass
 
