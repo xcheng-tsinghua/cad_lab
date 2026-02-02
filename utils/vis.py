@@ -9,7 +9,7 @@ import json
 import random
 import re
 # self
-from functions import step_proc
+from functional import step
 import utils
 
 

@@ -2,9 +2,9 @@
 解析草图和各种建模命令获得的 区域、边、点 拓扑
 """
 
-from functions.onshape.OspGeomBase import OspPoint, OspCoordSystem
-from functions.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
-from functions.onshape import utils, macro
+from functional.onshape.OspGeomBase import OspPoint, OspCoordSystem
+from functional.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
+from functional.onshape import utils, macro
 from warnings import warn
 
 

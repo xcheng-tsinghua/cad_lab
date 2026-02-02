@@ -5,8 +5,8 @@ import shutil
 import numpy as np
 
 from utils import vis, utils
-from functions import step_proc, img_proc, brep
-from functions.onshape import onshape_seq_parser
+from functional import step, image, brep
+from functional.onshape import onshape_seq_parser
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -603,7 +603,7 @@ def get_default_plane_id():
 def test_onshape_parser():
     onshape_seq_parser.parse_onshape_topology()
     # onshape_seq_parser.test_parse_sketch()
-    # from functions.onshape import onshape_seq_parser_old as od
+    # from functional.onshape import onshape_seq_parser_old as od
     # od.test()
 
 

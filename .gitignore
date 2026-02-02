@@ -2,7 +2,7 @@ pythonocc-demos/
 tmp/
 log/
 __pycache__/
-functions/__pycache__/
+functional/__pycache__/
 utils/__pycache__/
 .idea/
 backups/
