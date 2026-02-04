@@ -21,6 +21,8 @@ from functional.onshape import macro
 from functional.onshape.OspGeomBase import point_list_to_numpy
 from functional.onshape.OperationParser import Extrude, Revolve, Sweep, Loft
 import json
+from functional import brep
+from OCC.Display.SimpleGui import init_display
 
 
 def plot_3d_sketch(sample_list):
@@ -193,6 +195,7 @@ def test_parse_bspline_face():
     with open(topo_ofs_file, 'r') as f:
         entity_topo = json.load(f)
 
+    all_parsed_face = []
     topo_parsed_all = {'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
     val1st_ofs = entity_topo['result']['message']['value']
     for val1st_item_ofs in val1st_ofs:
@@ -203,9 +206,16 @@ def test_parse_bspline_face():
         topo_parsed_all['edges'].extend(topo_parsed['edges'])
         topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
 
+        for topoface in topo_parsed['faces']:
+            if 'approximateBSplineSurface' in topoface.keys():
+                all_parsed_face.append(brep.construct_bspline_face(topoface['approximateBSplineSurface']))
+
     with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
         json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
-    asaxsa = 0
+
+    display, start_display, _, _ = init_display()
+    display.DisplayShape(all_parsed_face, update=True)
+    start_display()
 
 
 def parse_onshape_topology(

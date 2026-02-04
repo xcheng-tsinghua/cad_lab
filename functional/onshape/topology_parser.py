@@ -367,15 +367,18 @@ def parse_bspline_face(val7th_ofs):
 
         elif elem_type == 'innerLoopBSplineCurves':
             val9th_ofs = val7th_item_ofs['message']['value']['message']['value']
-            inner_loop_curves = []
+            inner_loop_curves1 = []
 
             for val9th_item_ofs in val9th_ofs:
                 val10th_ofs = val9th_item_ofs['message']['value']
 
+                inner_loop_curves2 = []
                 for val10th_item_ofs in val10th_ofs:
-                    inner_loop_curves.append(parse_single_bspline_pcurve(val10th_item_ofs))
+                    inner_loop_curves2.append(parse_single_bspline_pcurve(val10th_item_ofs))
 
-            parsed_bspline_face[elem_type] = inner_loop_curves
+                inner_loop_curves1.append(inner_loop_curves2)
+
+            parsed_bspline_face[elem_type] = inner_loop_curves1
 
         else:
             raise NotImplementedError

@@ -311,7 +311,7 @@ def make_array1_real(vals):
 def make_array1_int(vals):
     arr = TColStd_Array1OfInteger(1, len(vals))
     for i, v in enumerate(vals):
-        arr.SetValue(i+1, int(v))
+        arr.SetValue(i+1, round(v))
     return arr
 
 
@@ -333,7 +333,7 @@ def make_edge_from_curve2d(curve_json, surface):
     mults_arr = TColStd_Array1OfInteger(1, len(mults))
     for i, k in enumerate(knots):
         knots_arr.SetValue(i + 1, float(k))
-        mults_arr.SetValue(i + 1, int(mults[i]))
+        mults_arr.SetValue(i + 1, round(mults[i]))
 
     # ---------- weights ----------
     weights_arr = None
@@ -344,14 +344,23 @@ def make_edge_from_curve2d(curve_json, surface):
             weights_arr.SetValue(i + 1, float(val))
 
     # ---------- build curve ----------
-    pcurve = Geom2d_BSplineCurve(
-        poles,
-        weights_arr,
-        knots_arr,
-        mults_arr,
-        degree,
-        is_periodic
-    )
+    if is_rational:
+        pcurve = Geom2d_BSplineCurve(
+            poles,
+            weights_arr,
+            knots_arr,
+            mults_arr,
+            round(degree),
+            False
+        )
+    else:
+        pcurve = Geom2d_BSplineCurve(
+            poles,
+            knots_arr,
+            mults_arr,
+            round(degree),
+            False
+        )
 
     return BRepBuilderAPI_MakeEdge(pcurve, surface).Edge()
 
@@ -383,30 +392,45 @@ def construct_bspline_face(face_data):
     uK, uM = compress_knots(surf["uKnots"])
     vK, vM = compress_knots(surf["vKnots"])
 
-    surface = Geom_BSplineSurface(
-        poles,
-        weights_arr,
-        make_array1_real(uK),
-        make_array1_real(vK),
-        make_array1_int(uM),
-        make_array1_int(vM),
-        surf["uDegree"],
-        surf["vDegree"],
-        surf["isUPeriodic"],
-        surf["isVPeriodic"]
-    )
-
-    # ===== 2. 构造 2D pcurve → Edge =====
-
+    if surf["isRational"]:
+        surface = Geom_BSplineSurface(
+            poles,
+            weights_arr,
+            make_array1_real(uK),
+            make_array1_real(vK),
+            make_array1_int(uM),
+            make_array1_int(vM),
+            round(surf["uDegree"]),
+            round(surf["vDegree"]),
+            False,
+            False
+        )
+    else:
+        surface = Geom_BSplineSurface(
+            poles,
+            make_array1_real(uK),
+            make_array1_real(vK),
+            make_array1_int(uM),
+            make_array1_int(vM),
+            round(surf["uDegree"]),
+            round(surf["vDegree"]),
+            False,
+            False
+        )
 
     # ===== 3. 外边界 Wire =====
-    wire_builder = BRepBuilderAPI_MakeWire()
-    for c in face_data["boundaryBSplineCurves"]:
-        wire_builder.Add(make_edge_from_curve2d(c, surface))
-    outer_wire = wire_builder.Wire()
+    if face_data["boundaryBSplineCurves"]:
 
-    # ===== 4. 构造 Face =====
-    face_builder = BRepBuilderAPI_MakeFace(surface, outer_wire, True)
+        wire_builder = BRepBuilderAPI_MakeWire()
+        for c in face_data["boundaryBSplineCurves"]:
+            wire_builder.Add(make_edge_from_curve2d(c, surface))
+        outer_wire = wire_builder.Wire()
+
+        # ===== 4. 构造 Face =====
+        face_builder = BRepBuilderAPI_MakeFace(surface, outer_wire, True)
+
+    else:
+        face_builder = BRepBuilderAPI_MakeFace(surface, True)
 
     # ===== 5. 内环 =====
     for loop in face_data.get("innerLoopBSplineCurves", []):
@@ -420,6 +444,7 @@ def construct_bspline_face(face_data):
     # ===== 6. 修复拓扑 =====
     fixer = ShapeFix_Face(face)
     fixer.Perform()
+
     return fixer.Face()
 
 

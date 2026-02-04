@@ -738,7 +738,7 @@ if __name__ == '__main__':
     # vis_pcd_gen()
 
     test_onshape_parser()
-    # brep.construct_tour()
+
 
     pass
 
