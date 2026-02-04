@@ -394,6 +394,7 @@ class OnshapeClient(object):
                 '''
                     for (var l = 0; l < size(q_arr); l+= 1){
                         var topo = {};
+                        topo.regions = [];
                         topo.bodies = [];
                         topo.faces = [];
                         topo.edges = [];
@@ -413,7 +414,7 @@ class OnshapeClient(object):
                                const edge_id = transientQueriesToStrings(edge_arr[j]);
                                region_topo.edges = append(region_topo.edges, edge_id);
                            }
-                           topo.faces = append(topo.faces, region_topo);
+                           topo.regions = append(topo.regions, region_topo);
                         }
                         
                         /* ---------- 1. Body (ALL bodies generated) ---------- */
@@ -440,6 +441,10 @@ class OnshapeClient(object):
                             face_topo.id = transientQueriesToStrings(face_arr[i]);
                             face_topo.edges = [];
                             face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});
+                            
+                            // 获取近似的 BSpline Surface
+                            face_topo.approximateBSplineSurface = evApproximateBSplineSurface(context, {face: face_arr[i]});
+                            
                             var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);
                             var edge_arr = evaluateQuery(context, q_edge);
                             for (var j = 0; j < size(edge_arr); j += 1) {

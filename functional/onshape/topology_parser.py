@@ -175,7 +175,7 @@ def parse_feat_topo(val2nd_ofs):
                 val6th_ofs = val5th_item_ofs['message']['value']
 
                 if elem_type == 'param':
-                    if val2nd_item_type == 'faces':
+                    if val2nd_item_type in ('faces', 'regions'):
                         v = parse_face_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'edges':
@@ -183,9 +183,6 @@ def parse_feat_topo(val2nd_ofs):
 
                     elif val2nd_item_type == 'vertices':
                         v = parse_last_msg_val_list(val6th_ofs['message']['value'])
-
-                    # elif val2nd_item_type == 'bodies':
-                    #     v = parse_body_msg(val6th_ofs)
 
                     else:
                         raise NotImplementedError(f'elem not supported: {val2nd_item_type}')
