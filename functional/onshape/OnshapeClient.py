@@ -1,7 +1,6 @@
 import json
 import string
 import random
-import mimetypes
 import os
 from colorama import Fore, Back, Style
 import base64
@@ -39,9 +38,9 @@ class OnshapeAPI(object):
 
             except Exception as e:
                 self.save_creds(creds)
-                exit(Fore.BLUE + Back.CYAN + f'Please restart the app. Exception: {e}' + Style.RESET_ALL)
+                exit(Fore.BLUE + f'Please restart the app. Exception: {e}' + Style.RESET_ALL)
 
-        print(Fore.GREEN + Back.CYAN + f'onshape instance created: url = {self._url}, access key = {self._access_key}' + Style.RESET_ALL)
+        print(Fore.GREEN + f'onshape instance created: url = {self._url}, access key = {self._access_key}' + Style.RESET_ALL)
 
     @staticmethod
     def save_creds(json_path):
@@ -179,10 +178,10 @@ class OnshapeAPI(object):
             return self.request(method, location.path, query=new_query, headers=headers, base_url=new_base_url)
 
         elif not 200 <= res.status_code <= 206:
-            print(Fore.RED + Back.CYAN + 'request failed, details: ' + res.text + Style.RESET_ALL)
+            print(Fore.RED + 'request failed, details: ' + res.text + Style.RESET_ALL)
 
         else:
-            print(Fore.WHITE + Back.CYAN + f'request succeeded, status code: {res.status_code}' + Style.RESET_ALL)
+            print(Fore.WHITE + f'request succeeded, status code: {res.status_code}' + Style.RESET_ALL)
 
         return res
 
@@ -201,20 +200,6 @@ class OnshapeClient(object):
             - logging (bool, default=True): Turn logging on or off
         """
         self._api = OnshapeAPI(creds=creds)
-
-    def get_tessellatedfaces(self, did, wid, eid):
-        """
-        Gets the feature list for specified document / workspace / part studio.
-
-        Args:
-            - did (str): Document ID
-            - wid (str): Workspace ID
-            - eid (str): Element ID
-
-        Returns:
-            - requests.Response: OnShape response data
-        """
-        return self._api.request('get', f'/api/partstudios/d/{did}/w/{wid}/e/{eid}/tessellatedfaces')
 
     def get_entity_by_id(self, did, wid, eid, geo_id, entity_type):
         """
@@ -530,18 +515,8 @@ class OnshapeClient(object):
     def request_topo_roll_back_to_with_details(self, model_url, feat_id_list, roll_back_index, is_load, json_path):
         """
         获取回滚到某个建模步骤前的模型拓扑，对于面而言额外获取
-            p_range
-            p_curve
-            outer_loop
-            inner_loop
-            topology_normal
+            近似的 BSplineSurface
 
-        :param model_url:
-        :param feat_id_list:
-        :param roll_back_index:
-        :param is_load:
-        :param json_path:
-        :return:
         """
         body = {
             "script":
@@ -591,64 +566,23 @@ class OnshapeClient(object):
                         }
 
                         /* ---------- 1. Face (ALL faces generated) ---------- */
-                        var face_arr = evaluateQuery(context, qCreatedBy(makeId(q_arr[l]), EntityType.FACE));
+                        var q_face = qCreatedBy(makeId(q_arr[l]), EntityType.FACE);
+                        var face_arr = evaluateQuery(context, q_face);
                         for (var i = 0; i < size(face_arr); i += 1) {
-                            var faceQ = face_arr[i]
                             var face_topo = {};
+                            face_topo.id = transientQueriesToStrings(face_arr[i]);
+                            face_topo.edges = [];
+                            face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});
                             
-                            // face id
-                            face_topo.id = transientQueriesToStrings(faceQ);
+                            // 获取近似的 BSpline Surface
+                            face_topo.approximateBSplineSurface = evApproximateBSplineSurface(context, {face: face_arr[i]});
                             
-                            // face parametric function
-                            face_topo.param = evSurfaceDefinition(context, {face: faceQ});
-                            
-                            // ---------- 01. Outer Loop ----------
-                            face_topo.outerLoops = [];
-                            var outerLoops = evaluateQuery(context, qFaceOuterLoop(faceQ));
-                            
-                            // Loop over outer loop (should be 1 usually)
-                            for (var oi = 0; oi < size(outerLoops); oi += 1){
-                            
-                                var loopTopo = {};
-                                loopTopo.edges = [];
-                                var edges = evaluateQuery(context, qLoopEdges(outerLoops[oi]));
-                                
-                                for (var e = 0; e < size(edges); e += 1)
-                                {
-                                    var edgeQ = edges[e];
-                                    loopTopo.edges = append(loopTopo.edges, {
-                                        "id": transientQueriesToStrings(edgeQ),
-                                        "pCurve": evPCurveDefinition(context, {edge: edgeQ, face: faceQ}), 
-                                        "reversed": isQueryReversedInLoop(edgeQ, outerLoops[oi])
-                                    });
-                                }
-                                
-                                face_topo.outerLoops = append(face_topo.outerLoops, loopTopo);
+                            var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);
+                            var edge_arr = evaluateQuery(context, q_edge);
+                            for (var j = 0; j < size(edge_arr); j += 1) {
+                                const edge_id = transientQueriesToStrings(edge_arr[j]);
+                                face_topo.edges = append(face_topo.edges, edge_id);
                             }
-                            
-                            // ---------- 02. Inner Loops ----------
-                            face_topo.innerLoops = [];
-                            var innerLoops = evaluateQuery(context, qFaceInnerLoop(faceQ));
-
-                            for (var ii = 0; ii < size(innerLoops); ii += 1){
-                            
-                                var loopTopo = {};
-                                loopTopo.edges = [];
-                                var edges_inner = evaluateQuery(context, qLoopEdges(innerLoops[ii]));
-                                
-                                for (var je2 = 0; je2 < size(edges_inner); je2 += 1)
-                                {
-                                    var edgeInQ = edges_inner[je2];
-                                    loopTopo.edges = append(loopTopo.edges, {
-                                        "id": transientQueriesToStrings(edgeInQ),
-                                        "pCurve": evPCurveDefinition(context, {edge: edgeInQ, face: faceQ}), 
-                                        "reversed": isQueryReversedInLoop(edgeInQ, innerLoops[ii])
-                                    });
-                                }
-                                
-                                face_topo.innerLoops = append(face_topo.innerLoops, loopTopo);
-                            }
-                            
                             topo.faces = append(topo.faces, face_topo);
                         }
 
@@ -932,9 +866,9 @@ class OnshapeClient(object):
 
         return entity_topo
 
-    def request_multi_entity_topology_v2(self, model_url, ent_id_list, is_load, json_path):
+    def request_multi_entity_topology_one_by_one(self, model_url, ent_id_list, is_load, json_path):
         """
-        通过草图特征或者拉伸等特征的 id 解析拓扑结构，包含草图区域，边、角点等
+        将 entity_id 逐个输入到 function，以消除默认的去重和去无效id的步骤
         """
         body = {
             'script': '''function(context is Context, queries) {
@@ -1129,32 +1063,9 @@ class OnshapeClient(object):
         midpoint = [x['message']['value'] for x in point_info]
         return midpoint
 
-    def expr2meter(self, did, wid, eid, expr):
-        """
-        convert value expresson to meter unit
-        """
-        body = {
-            "script":
-                "function(context is Context, queries) { "
-                "   return lookupTableEvaluate(\"%s\") * meter;" % (expr) +
-                "}",
-            "queries": []
-        }
-
-        res = self._api.request('post', f'/api/partstudios/d/{did}/w/{wid}/e/{eid}/featurescript', body=body).json()
-        return res['result']['message']['value']
-
     def request_features(self, model_url, is_load, json_path):
         """
-        Gets the feature list for specified document / workspace / part studio.
-
-        Args:
-            - did (str): Document ID
-            - wid (str): Workspace ID
-            - eid (str): Element ID
-
-        Returns:
-            - requests.Response: Onshape response data
+        获取特征列表
         """
         if is_load:
             print(Fore.GREEN + f'从文件加载原始特征列表: {json_path}' + Style.RESET_ALL)
@@ -1205,6 +1116,40 @@ class OnshapeClient(object):
 
         return ofs
 
+    def request_export_parasolid_roll_back_to(self, model_url, filename, units, micro_version):
+        """
+        将指定的模型转化为 parasolid 模型
+        """
+        query = {"format": "x_t", "units": units}
 
+        v_list = model_url.split("/")
+        did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+        res = self._api.request('get', f'/api/partstudios/d/{did}/m/{micro_version}/e/{eid}/parasolid', query)
 
+        with open(filename, "wb") as f:
+            for chunk in res.iter_content(8192):
+                f.write(chunk)
 
+    def request_history(self, model_url, is_load, json_path):
+        """
+        获取模型 micro version
+        """
+        if is_load:
+            print(Fore.GREEN + f'从文件加载修改历史: {json_path}' + Style.RESET_ALL)
+            with open(json_path, 'r') as f:
+                ofs = json.load(f)
+
+        else:
+            print(Fore.CYAN + '从 onshape 请求原始修改历史' + Style.RESET_ALL)
+
+            v_list = model_url.split("/")
+            did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
+
+            res = self._api.request('get', f'/api/partstudios/d/{did}/documenthistory')
+            ofs = res.json()
+
+            print(Fore.CYAN + '保存原始修改历史' + Style.RESET_ALL)
+            with open(json_path, 'w') as f:
+                json.dump(ofs, f, ensure_ascii=False, indent=4)
+
+        return ofs

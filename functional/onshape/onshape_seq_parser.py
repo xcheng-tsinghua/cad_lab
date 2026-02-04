@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from functional.onshape import macro
 from functional.onshape.OspGeomBase import point_list_to_numpy
 from functional.onshape.OperationParser import Extrude, Revolve, Sweep, Loft
+import json
 
 
 def plot_3d_sketch(sample_list):
@@ -187,9 +188,29 @@ def in_a_not_in_b(a, b):
     return diff_a
 
 
+def test_parse_bspline_face():
+    topo_ofs_file = r'D:\document\DeepLearningIdea\multi_cmd_seq_gen\more_diverse_v2\operation_topo_rollback_10.json'
+    with open(topo_ofs_file, 'r') as f:
+        entity_topo = json.load(f)
+
+    topo_parsed_all = {'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
+    val1st_ofs = entity_topo['result']['message']['value']
+    for val1st_item_ofs in val1st_ofs:
+        topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
+
+        topo_parsed_all['bodies'].extend(topo_parsed['bodies'])
+        topo_parsed_all['faces'].extend(topo_parsed['faces'])
+        topo_parsed_all['edges'].extend(topo_parsed['edges'])
+        topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
+
+    with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
+        json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
+    asaxsa = 0
+
+
 def parse_onshape_topology(
         model_url: str = macro.URL,
-        is_load_ofs: bool = False,
+        is_load_ofs: bool = True,
         is_load_topo: bool = False,
         save_root: str = macro.SAVE_ROOT
 ):
@@ -201,7 +222,7 @@ def parse_onshape_topology(
     onshape_client = OnshapeClient()
 
     # 获取最初的操作特征列表
-    feat_ofs = onshape_client.request_features(model_url, is_load_ofs, os.path.join(save_root, 'feat_ofs.json'))
+    feat_ofs = onshape_client.request_features(model_url, is_load_ofs, os.path.join(save_root, 'feat_ofs_10.json'))
 
     all_feat_id, all_feat_type = get_feat_id(feat_ofs)
     print(f'number of all feat: {len(all_feat_id)}.')
@@ -218,11 +239,26 @@ def parse_onshape_topology(
         # 对于草图则可以合并到后面的建模操作一起请求，因为草图构建的实体不会被更改
         request_feat_id.append(feat_id)
 
+        # 需要回滚到该特征构建之后
+        roll_back_idx = idx + 1
+
+        # if feat_type in ('extrude', 'revolve', 'sweep', 'loft', 'fillet', 'chamfer', 'linearPattern', 'circularPattern',
+        #                  'draft', 'rib', 'mirror'):
+        #     onshape_client.request_export_parasolid_roll_back_to(model_url, os.path.join(save_root, f'model_rollback_{idx + 1}.x_t'), macro.GLOBAL_UNIT, idx + 1)
+        #
+        # continue
+
+        if roll_back_idx != 10:
+            continue
+
+
         # if feat_type in ('extrude', 'revolve', 'sweep', 'loft', 'fillet', 'chamfer', 'linearPattern', 'circularPattern', 'draft', 'rib', 'mirror'):
         # 向服务器请求当前操作下的模型拓扑
         # 感觉最好还是一个操作请求一次，否则可能遗漏信息，相比节省request，还是弄得完全些
-        entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, idx + 1, is_load_topo, os.path.join(save_root, f'operation_topo_rollback_{idx + 1}.json'))
+        entity_topo = onshape_client.request_topo_roll_back_to_with_details(model_url, request_feat_id, roll_back_idx, is_load_topo, os.path.join(save_root, f'operation_topo_rollback_{idx + 1}.json'))
         parsed_entity_id_all.extend(extract_entity_ids(entity_topo))
+
+        # exit('qqqqqqqqqqqqqqqqqqq')
 
         val1st_ofs = entity_topo['result']['message']['value']
         for val1st_item_ofs in val1st_ofs:

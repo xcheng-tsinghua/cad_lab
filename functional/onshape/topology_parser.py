@@ -5,7 +5,7 @@
 from functional.onshape.OspGeomBase import OspPoint, OspCoordSystem
 from functional.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
 from functional.onshape import utils, macro
-from warnings import warn
+from colorama import Fore, Back, Style
 
 
 def parse_vert_dict(sketch_topology):
@@ -106,7 +106,7 @@ def parse_edge_dict(sketch_topology, vert_dict):
 
         elif edge_type == 'OTHER':
             # 未知类型，直接解析为两个点
-            warn('edge type OTHER occurred, treated as LINE')
+            print(Fore.RED + 'edge type OTHER occurred, treated as LINE' + Style.RESET_ALL)
             edge_points_parsed = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
             edge_parsed = OspLine(edge_points_parsed[0], edge_points_parsed[1], edge_id)
 
@@ -182,7 +182,7 @@ def parse_feat_topo(val2nd_ofs):
                         v = parse_edge_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'vertices':
-                        v = parse_vertex_msg(val6th_ofs)
+                        v = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
                     # elif val2nd_item_type == 'bodies':
                     #     v = parse_body_msg(val6th_ofs)
@@ -199,8 +199,11 @@ def parse_feat_topo(val2nd_ofs):
                 elif elem_type == 'midpoint':
                     v = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
+                elif elem_type == 'approximateBSplineSurface':
+                    v = parse_bspline_face(val6th_ofs['message']['value'])
+
                 else:
-                    warn(f'not considered key occurred: {elem_type}, parsed as [message][value]')
+                    print(Fore.RED + f'not considered key occurred: {elem_type}, parsed as [message][value]' + Style.RESET_ALL)
                     v = val6th_ofs['message']['value']
 
                 geo_dict[elem_type] = v
@@ -233,7 +236,7 @@ def parse_body_msg(val6th_ofs):
             v = val9th_ofs
 
         else:
-            warn(f'not considered key occurred: {k}, save directly')
+            print(Fore.RED + f'not considered key occurred: {k}, save directly' + Style.RESET_ALL)
             v = val9th_ofs
 
         face_param[k] = v
@@ -263,7 +266,7 @@ def parse_face_msg(val6th_ofs):
             v = val9th_ofs
 
         else:
-            warn(f'not considered key occurred: {k}, save directly')
+            print(Fore.RED + f'not considered key occurred: {k}, save directly' + Style.RESET_ALL)
             v = val9th_ofs
 
         face_param[k] = v
@@ -285,7 +288,7 @@ def parse_coord_msg(response):
             v = parse_last_msg_val_list(v_msg)
 
         else:
-            warn(f'not considered key occurred: {k}, parsed as origin')
+            print(Fore.RED + f'not considered key occurred: {k}, parsed as origin' + Style.RESET_ALL)
             v = parse_last_msg_val_list(v_msg)
 
         coord_param[k] = v
@@ -322,7 +325,7 @@ def parse_edge_msg(val6th_ofs):
             v = parse_past_last_msg_val_list(val9th_item_ofs)
 
         else:
-            warn(f'not considered key occurred: {k}, save directly')
+            print(Fore.RED + f'not considered key occurred: {k}, save directly' + Style.RESET_ALL)
             v = val9th_item_ofs
 
         edge_topo[k] = v
@@ -333,6 +336,10 @@ def parse_edge_msg(val6th_ofs):
 def parse_last_msg_val_list(last_msg_val_list_ofs):
     """
     解析最深的仅需['message']['value']即可获取值的数组
+
+    自身是一个数组
+    每个 item 的 ['message']['value'] 是具体的数
+    返回这些数值组成的数组
     """
     assert isinstance(last_msg_val_list_ofs, list)
 
@@ -344,9 +351,132 @@ def parse_last_msg_val_list(last_msg_val_list_ofs):
     return val_parsed_list
 
 
+def parse_bspline_face(val7th_ofs):
+    """
+    从获取的 json 中解析详细 BSpline Surface 定义
+    """
+    parsed_bspline_face = {}
+    for val7th_item_ofs in val7th_ofs:
+        elem_type = val7th_item_ofs['message']['key']['message']['value']
+
+        if elem_type == 'bSplineSurface':  # bspline surface 定义
+            parsed_bspline_face[elem_type] = parse_bspline_face_bspline_surface(val7th_item_ofs)
+
+        elif elem_type == 'boundaryBSplineCurves':  # bspline surface 的边界线的参数空间中的曲线
+            parsed_bspline_face[elem_type] = parse_bspline_pcurve(val7th_item_ofs['message']['value']['message']['value'])
+
+        elif elem_type == 'innerLoopBSplineCurves':
+            val9th_ofs = val7th_item_ofs['message']['value']['message']['value']
+            inner_loop_curves = []
+
+            for val9th_item_ofs in val9th_ofs:
+                val10th_ofs = val9th_item_ofs['message']['value']
+
+                for val10th_item_ofs in val10th_ofs:
+                    inner_loop_curves.append(parse_single_bspline_pcurve(val10th_item_ofs))
+
+            parsed_bspline_face[elem_type] = inner_loop_curves
+
+        else:
+            raise NotImplementedError
+
+    return parsed_bspline_face
+
+
+def parse_bspline_face_bspline_surface(val7th_item_ofs):
+    """
+    获取 BSpline Face 上的 BSpline 曲面参数方程
+    """
+    val9th_ofs = val7th_item_ofs['message']['value']['message']['value']
+    parsed_bspline_surface = {}
+
+    for val9th_item_ofs in val9th_ofs:
+        elem_type = val9th_item_ofs['message']['key']['message']['value']
+        val11th_ofs = val9th_item_ofs['message']['value']['message']['value']
+
+        if elem_type == 'controlPoints':  # 解析控制点矩阵
+            # 控制点矩阵的全部信息
+
+            ctrl_point_seq1 = []
+            for val11th_item_ofs in val11th_ofs:
+                # 某一组控制点的全部信息
+                val12th_ofs = val11th_item_ofs['message']['value']
+
+                ctrl_point_seq2 = parse_past_last_msg_val_list(val12th_ofs)
+                ctrl_point_seq1.append(ctrl_point_seq2)
+
+            parsed_bspline_surface['controlPoints'] = ctrl_point_seq1
+
+        elif elem_type in ('isRational', 'isUPeriodic', 'isVPeriodic', 'surfaceType', 'uDegree', 'vDegree'):
+            parsed_bspline_surface[elem_type] = val11th_ofs
+
+        elif elem_type in ('uKnots', 'vKnots'):
+            parsed_bspline_surface[elem_type] = parse_last_msg_val_list(val11th_ofs)
+
+        elif elem_type == 'weights':
+            all_weights = []
+            for val11th_item_ofs in val11th_ofs:
+                parsed_weights = parse_last_msg_val_list(val11th_item_ofs['message']['value'])
+                all_weights.append(parsed_weights)
+
+            parsed_bspline_surface[elem_type] = all_weights
+
+        else:
+            raise NotImplementedError
+
+    return parsed_bspline_surface
+
+
+def parse_bspline_pcurve(val9th_ofs):
+    """
+    获取 BSpline Face 的边界 2d curve
+    """
+    parsed_bspline_pcurves = []
+
+    assert isinstance(val9th_ofs, list)
+    for val9th_item_ofs in val9th_ofs:
+        parsed_bspline_pcurve = parse_single_bspline_pcurve(val9th_item_ofs)
+        parsed_bspline_pcurves.append(parsed_bspline_pcurve)
+
+    return parsed_bspline_pcurves
+
+
+def parse_single_bspline_pcurve(val9th_item_ofs):
+    """
+    每个曲面边界可能有很多的边，这个函数解析其中一条边的 bspline pcurve 方程
+    """
+    val10th_ofs = val9th_item_ofs['message']['value']
+
+    parsed_single_bspline_pcurve = {}
+    for val10th_item_ofs in val10th_ofs:
+        elem_type = val10th_item_ofs['message']['key']['message']['value']
+        val12th_ofs = val10th_item_ofs['message']['value']['message']['value']
+
+        if elem_type == 'controlPoints':
+            parsed_single_bspline_pcurve['controlPoints'] = parse_past_last_msg_val_list(val12th_ofs)
+
+        elif elem_type in ('curveType', 'degree', 'dimension', 'isPeriodic', 'isRational'):
+            parsed_single_bspline_pcurve[elem_type] = val12th_ofs
+
+            if elem_type == 'curveType':
+                assert val12th_ofs == 'SPLINE'
+
+        elif elem_type == 'knots':
+            parsed_single_bspline_pcurve[elem_type] = parse_last_msg_val_list(val12th_ofs)
+
+        else:
+            raise NotImplementedError
+
+    return parsed_single_bspline_pcurve
+
+
 def parse_past_last_msg_val_list(past_last_msg_val_list):
     """
     解析二重列表，最深一层可能是点坐标
+
+    自身是一个 list，表示一组数据
+    每个 item 的 ['message']['value'] 也是一个 list，表示一个数据，比如一个点
+    item['message']['value'][idx]['message']['value'] 有具体数值，表示点的具体坐标，例如 x、y、z
     """
     assert isinstance(past_last_msg_val_list, list)
     val_parsed_list = []
@@ -370,7 +500,7 @@ def parse_last_msg_val(last_value_ofs):
         unit = unit[0]
 
         # 获取单位
-        mul_unit = utils.get_unit_trans_coff((unit['key'], unit['value']), macro.GLOBAL_UNIT)
+        mul_unit = utils.get_unit_trans_coff(unit['key'], unit['value'], macro.GLOBAL_UNIT)
 
         # 进行单位转换
         val_parsed *= mul_unit
@@ -392,13 +522,13 @@ def parse_last_id(last_msg_val_list_ofs):
     return id_parsed_list
 
 
-def parse_vertex_msg(val6th_ofs):
-    """
-    parse vertex parameters from OnShape response data
-    """
-    assert isinstance(val6th_ofs, dict)
-    vertices = parse_last_msg_val_list(val6th_ofs['message']['value'])
-
-    return vertices
+# def parse_vertex_msg(val6th_ofs):
+#     """
+#     parse vertex parameters from OnShape response data
+#     """
+#     assert isinstance(val6th_ofs, dict)
+#     vertices = parse_last_msg_val_list(val6th_ofs['message']['value'])
+#
+#     return vertices
 
 

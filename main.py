@@ -601,10 +601,7 @@ def get_default_plane_id():
 
 
 def test_onshape_parser():
-    onshape_seq_parser.parse_onshape_topology()
-    # onshape_seq_parser.test_parse_sketch()
-    # from functional.onshape import onshape_seq_parser_old as od
-    # od.test()
+    onshape_seq_parser.test_parse_bspline_face()
 
 
 def vis_cst_pcd_folder(target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2'):
@@ -740,8 +737,8 @@ if __name__ == '__main__':
     # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
     # vis_pcd_gen()
 
-    # test_onshape_parser()
-    brep.test_construct()
+    test_onshape_parser()
+    # brep.construct_tour()
 
     pass
 
