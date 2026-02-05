@@ -4,7 +4,7 @@
 
 import os
 import shutil
-from functional import utils
+from functional import file_system
 from tqdm import tqdm
 from multiprocessing import Pool
 from functools import partial

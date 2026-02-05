@@ -4,7 +4,7 @@ import shutil
 
 import numpy as np
 
-from functional import utils
+from functional import file_system, step
 from functional.onshape import onshape_seq_parser
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -86,7 +86,7 @@ def is_all_step_transed(source_dir=r'F:\document\deeplearning\Param20K_Extend', 
     判断是否全部的step文件都进行了转换
     :return:
     """
-    all_step = utils.get_allfiles(source_dir, 'STEP')
+    all_step = file_system.get_allfiles(source_dir, 'STEP')
 
     for c_step in tqdm(all_step):
         pcd_path = c_step.replace(source_dir, target_dir)
@@ -102,7 +102,7 @@ def is_npnt_sufficient():
     :return:
     """
     target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend'
-    fils_all = utils.get_allfiles(target_dir)
+    fils_all = file_system.get_allfiles(target_dir)
     for c_file in tqdm(fils_all):
         c_pnd = np.loadtxt(c_file)
         c_num = c_pnd.shape[0]
@@ -132,7 +132,7 @@ def source_to(source_dir=r'F:\document\deeplearning\Param20K_Extend', target_dir
             c_step = c_pcd.replace(target_dir, source_dir)
             c_step = os.path.splitext(c_step)[0] + '.STEP'
 
-            real_saved = step_proc.step2pcd(c_step, c_pcd, 2000, print_log=False, over_rate=over_rate)
+            real_saved = step.step2pcd(c_step, c_pcd, 2000, print_log=False, over_rate=over_rate)
 
             if real_saved >= 2000:
                 break
@@ -235,11 +235,11 @@ def process_cannot_convert():
         pcd_path = os.path.splitext(pcd_path)[0] + '.txt'
 
         print(f'[{idx} / {len(fail_files)}] 当前处理：{c_step}')
-        step_proc.step2pcd(c_step, pcd_path, 2000, 1e-4)
+        step.step2pcd(c_step, pcd_path, 2000, 1e-4)
 
 
 def del_except(target_dir=r'F:\document\deeplearning\Param20K_Extend', suffix='.STEP'):
-    files_all = utils.get_allfiles(target_dir, None)
+    files_all = file_system.get_allfiles(target_dir, None)
 
     for c_file in tqdm(files_all):
         c_suffix = os.path.splitext(c_file)[1]
@@ -261,7 +261,7 @@ def vis_pcd_gen():
     stepfile = r'D:\document\DeepLearning\DataSet\STEP_All\Param20K_STEP\train\rivet\trans13120.STEP'
     pcd_file = r'C:\Users\ChengXi\Desktop\cstnet2\comb.txt'
     #
-    step_proc.step2pcd(stepfile, pcd_file, 2000, is_normalize=False)
+    step.step2pcd(stepfile, pcd_file, 2000, is_normalize=False)
     #
     # pcd_file = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\test\bearing\00042353.txt'
     pnts_all = np.loadtxt(pcd_file)
@@ -362,28 +362,28 @@ def sketch_proj_select_subset(src_folder, dst_folder, max_nsave_cat = 10):
     """
 
     # 在目标文件夹下创建类似的文件夹结构
-    utils.create_tree_like(src_folder, dst_folder)
+    file_system.create_tree_like(src_folder, dst_folder)
 
     # 获取全部类别
-    cls_all = utils.get_subdirs(os.path.join(src_folder, 'model_3d'))
+    cls_all = file_system.get_subdirs(os.path.join(src_folder, 'model_3d'))
 
     for c_cls in cls_all:
         c_save_cat = 0
 
         c_step_dir = os.path.join(src_folder, 'model_3d', c_cls)
-        c_steps_all = utils.get_allfiles(c_step_dir, 'step')
+        c_steps_all = file_system.get_allfiles(c_step_dir, 'step')
 
         c_ids = []
         for cc_step in c_steps_all:
-            c_base_name = utils.basename_without_ext(cc_step)
+            c_base_name = file_system.basename_without_ext(cc_step)
             c_ids.append(c_base_name)
 
         # 找到对应的图片和草图的路径
         c_img_dir = os.path.join(src_folder, 'photo', c_cls)
         c_skh_dir = os.path.join(src_folder, 'sketch_s3_352', c_cls)
 
-        c_imgs_all = utils.get_allfiles(c_img_dir, 'png')
-        c_skhs_all = utils.get_allfiles(c_skh_dir, 'txt')
+        c_imgs_all = file_system.get_allfiles(c_img_dir, 'png')
+        c_skhs_all = file_system.get_allfiles(c_skh_dir, 'txt')
 
         for c_id in c_ids:
             c_img_path = os.path.join(c_img_dir, c_id + '_1.png')
@@ -608,7 +608,7 @@ def vis_cst_pcd_folder(target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstne
 
 
     # 获取全部文件
-    all_pcd = utils.get_allfiles(target_dir)
+    all_pcd = file_system.get_allfiles(target_dir)
 
     # 打乱文件
     random.shuffle(all_pcd)
@@ -719,7 +719,7 @@ if __name__ == '__main__':
     # convert_jpg_to_png(r'E:\document\deeplearning_idea\sketch temporal is out\fid_cal_fig_save\generation', True)
 
     # acc_correct()
-    # utils.unify_step_suffix_recursive(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad\model_3d')
+    # file_system.unify_step_suffix_recursive(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad\model_3d')
 
     # sketch_proj_select_subset(r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad', r'D:\document\DeepLearning\DataSet\sketch_retrieval\sketch_cad_small')
 
@@ -733,8 +733,9 @@ if __name__ == '__main__':
     # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
     # vis_pcd_gen()
 
-    test_onshape_parser()
+    # test_onshape_parser()
 
+    print(np.linalg.norm(np.array([1, 2, 3] - np.array([2, 3, 4]))))
 
     pass
 

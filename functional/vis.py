@@ -10,7 +10,7 @@ import random
 import re
 # self
 from functional import step
-import utils
+import file_system
 
 
 def vis_pcd(filepath, attr_show=None, show_normal=False, delimiter='\t'):

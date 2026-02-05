@@ -448,12 +448,12 @@ def fix_bspline_loop(loop_bspline_list, tol=1e-4):
     if not loop_bspline_list:
         return []
 
-    if len(loop_bspline_list == 1):
-        ctrl = loop_bspline_list[0]['controlPoints']
-
-        p_dist =
-
-    for loop_bspline in loop_bspline_list:
+    # if len(loop_bspline_list == 1):
+    #     ctrl = loop_bspline_list[0]['controlPoints']
+    #
+    #     p_dist =
+    #
+    # for loop_bspline in loop_bspline_list:
 
 
 

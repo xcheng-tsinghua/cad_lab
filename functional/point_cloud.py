@@ -2,7 +2,7 @@ import os
 from tqdm import tqdm
 import re
 
-from functional import utils
+from functional import file_system
 
 
 def del_pcd_by_pointcount(dir_path, cmd='<2000'):
