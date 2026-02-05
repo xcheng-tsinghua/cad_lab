@@ -4,8 +4,7 @@
 
 import os
 import shutil
-from utils import utils
-from functional import svg, image
+from functional import utils
 from tqdm import tqdm
 from multiprocessing import Pool
 from functools import partial

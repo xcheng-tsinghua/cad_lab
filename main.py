@@ -4,17 +4,13 @@ import shutil
 
 import numpy as np
 
-from utils import vis, utils
-from functional import step, image, brep
+from functional import utils
 from functional.onshape import onshape_seq_parser
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import upper_funcs
 from PIL import Image
-from pathlib import Path
-import requests
-from requests.auth import HTTPBasicAuth
+
+
 # from onshape_client.client import Client
 
 

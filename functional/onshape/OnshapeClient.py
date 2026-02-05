@@ -442,7 +442,7 @@ class OnshapeClient(object):
                             face_topo.edges = [];
                             face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});
                             
-                            // 获取近似的 BSpline Surface
+                            // 获取近似的 BSpline Surface，便于重构曲面
                             face_topo.approximateBSplineSurface = evApproximateBSplineSurface(context, {face: face_arr[i]});
                             
                             var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);

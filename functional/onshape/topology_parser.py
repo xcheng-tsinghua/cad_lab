@@ -4,7 +4,7 @@
 
 from functional.onshape.OspGeomBase import OspPoint, OspCoordSystem
 from functional.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
-from functional.onshape import utils, macro
+from functional.onshape import on_utils, macro
 from colorama import Fore, Back, Style
 
 
@@ -364,18 +364,20 @@ def parse_bspline_face(val7th_ofs):
 
         elif elem_type == 'innerLoopBSplineCurves':
             val9th_ofs = val7th_item_ofs['message']['value']['message']['value']
-            inner_loop_curves1 = []
+            inner_loops = []
 
+            # 可能有多个 inner loop
             for val9th_item_ofs in val9th_ofs:
                 val10th_ofs = val9th_item_ofs['message']['value']
 
-                inner_loop_curves2 = []
+                # 每个 inner loop 可能由多个 bspline curve 组成
+                single_inner_loop = []
                 for val10th_item_ofs in val10th_ofs:
-                    inner_loop_curves2.append(parse_single_bspline_pcurve(val10th_item_ofs))
+                    single_inner_loop.append(parse_single_bspline_pcurve(val10th_item_ofs))
 
-                inner_loop_curves1.append(inner_loop_curves2)
+                inner_loops.append(single_inner_loop)
 
-            parsed_bspline_face[elem_type] = inner_loop_curves1
+            parsed_bspline_face[elem_type] = inner_loops
 
         else:
             raise NotImplementedError
@@ -395,17 +397,17 @@ def parse_bspline_face_bspline_surface(val7th_item_ofs):
         val11th_ofs = val9th_item_ofs['message']['value']['message']['value']
 
         if elem_type == 'controlPoints':  # 解析控制点矩阵
-            # 控制点矩阵的全部信息
+            # 控制点矩阵由 m 行 n 列控制点组成
 
-            ctrl_point_seq1 = []
+            ctrl_point_rows = []
             for val11th_item_ofs in val11th_ofs:
-                # 某一组控制点的全部信息
+                # 每次循环获取一行控制点（n 个）
+
                 val12th_ofs = val11th_item_ofs['message']['value']
+                ctrl_point_single_row = parse_past_last_msg_val_list(val12th_ofs)
+                ctrl_point_rows.append(ctrl_point_single_row)
 
-                ctrl_point_seq2 = parse_past_last_msg_val_list(val12th_ofs)
-                ctrl_point_seq1.append(ctrl_point_seq2)
-
-            parsed_bspline_surface['controlPoints'] = ctrl_point_seq1
+            parsed_bspline_surface['controlPoints'] = ctrl_point_rows
 
         elif elem_type in ('isRational', 'isUPeriodic', 'isVPeriodic', 'surfaceType', 'uDegree', 'vDegree'):
             parsed_bspline_surface[elem_type] = val11th_ofs
@@ -500,7 +502,7 @@ def parse_last_msg_val(last_value_ofs):
         unit = unit[0]
 
         # 获取单位
-        mul_unit = utils.get_unit_trans_coff(unit['key'], unit['value'], macro.GLOBAL_UNIT)
+        mul_unit = on_utils.get_unit_trans_coff(unit['key'], unit['value'], macro.GLOBAL_UNIT)
 
         # 进行单位转换
         val_parsed *= mul_unit
@@ -521,14 +523,5 @@ def parse_last_id(last_msg_val_list_ofs):
 
     return id_parsed_list
 
-
-# def parse_vertex_msg(val6th_ofs):
-#     """
-#     parse vertex parameters from OnShape response data
-#     """
-#     assert isinstance(val6th_ofs, dict)
-#     vertices = parse_last_msg_val_list(val6th_ofs['message']['value'])
-#
-#     return vertices
 
 

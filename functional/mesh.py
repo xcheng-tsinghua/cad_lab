@@ -4,7 +4,7 @@ import pymeshlab
 import numpy as np
 import shutil
 
-from utils import utils
+from functional import utils
 
 
 def get_points_o3d(mesh_file, n_points, save_path):

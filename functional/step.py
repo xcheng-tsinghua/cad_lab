@@ -1,57 +1,46 @@
 # open cascade
-import random
 
 from OCC.Core.STEPControl import STEPControl_Reader
 from OCC.Core.StlAPI import StlAPI_Writer
 from OCC.Core.IFSelect import IFSelect_RetDone
 from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
-from OCC.Core.gp import gp_Pnt, gp_Vec, gp_Dir
 from OCC.Core.TopExp import TopExp_Explorer
-from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_SOLID, TopAbs_ShapeEnum, TopAbs_REVERSED
-from OCC.Core.TopoDS import TopoDS_Shape, TopoDS_Face, TopoDS_Edge
+from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_SOLID, TopAbs_REVERSED
+from OCC.Core.TopoDS import TopoDS_Shape, TopoDS_Face
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
 from OCC.Core.BRepExtrema import BRepExtrema_DistShapeShape
 from OCC.Core.TopoDS import topods
 from OCC.Core.Precision import precision
-from OCC.Core.GProp import GProp_PGProps, GProp_GProps
+from OCC.Core.GProp import GProp_PGProps
 from OCC.Core.BRepGProp import brepgprop
 from OCC.Core.BRep import BRep_Tool
 from OCC.Core.TopExp import topexp
 from OCC.Core.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
-from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Common
-from OCC.Core.Geom import Geom_ConicalSurface, Geom_Plane, Geom_CylindricalSurface, Geom_Curve, Geom_SphericalSurface, Geom_Surface
+from OCC.Core.Geom import Geom_Surface
 from OCC.Core.TDocStd import TDocStd_Document
 from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
 from OCC.Core.STEPCAFControl import STEPCAFControl_Reader
 from OCC.Core.TDF import TDF_LabelSequence
 from OCC.Core.BRep import BRep_Builder
 from OCC.Core.TopoDS import TopoDS_Compound
-from OCC.Core.TopTools import TopTools_IndexedMapOfShape
 from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCC.Core.GeomLProp import GeomLProp_SLProps
-from OCC.Core.BRepTools import breptools
 from OCC.Core.GeomAdaptor import GeomAdaptor_Surface
-from OCC.Core.GeomAbs import GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere
 from OCC.Display.SimpleGui import init_display
 from OCC.Core.BRepBndLib import brepbndlib
 from OCC.Core.Bnd import Bnd_Box
 from OCC.Core.gp import gp_Trsf, gp_Vec, gp_Pnt
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_Transform
 from OCC.Core.STEPControl import STEPControl_Writer, STEPControl_AsIs
-from OCC.Extend.DataExchange import write_step_file
 
 # others
 import os
-import open3d as o3d
-import pymeshlab
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 import json
 import logging
 from datetime import datetime
-import multiprocessing
 import itertools
 from collections import Counter
 import shutil
@@ -60,8 +49,7 @@ from multiprocessing import Pool
 import uuid
 
 # self
-from functional import mesh
-from utils import utils
+from functional import utils
 
 
 class PointOfParamPCD(gp_Pnt):

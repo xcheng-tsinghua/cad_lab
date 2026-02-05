@@ -209,7 +209,7 @@ def test_parse_bspline_face():
 
         for topoface in topo_parsed['faces']:
             if 'approximateBSplineSurface' in topoface.keys():
-                all_parsed_face.append(brep.construct_bspline_face(topoface['approximateBSplineSurface']))
+                all_parsed_face.append(brep.make_bspline_face(topoface['approximateBSplineSurface']))
 
     with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
         json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
