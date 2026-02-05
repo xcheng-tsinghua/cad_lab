@@ -249,48 +249,6 @@ def test_construct_circle():
     start_display()
 
 
-def construct_tour():
-    atour = gp_Torus()
-
-
-
-    # ========================
-    # 1️⃣ 定义环面的几何坐标系
-    # ========================
-    origin = gp_Pnt(0, 0, 0)
-    axis = gp_Dir(0, 0, 1)  # 环面绕 Z 轴
-    xdir = gp_Dir(1, 0, 0)
-
-    ax3 = gp_Ax3(origin, axis, xdir)
-
-    R_major = 50  # 主半径（甜甜圈大圆）
-    R_minor = 15  # 管半径（截面小圆）
-
-    torus_surf = Geom_ToroidalSurface(ax3, R_major, R_minor)
-
-    # ========================
-    # 2️⃣ UV 参数裁剪区间
-    # ========================
-    u1 = 0
-    u2 = 0.5 * math.pi  # 主圆方向范围
-
-    v1 = 0
-    v2 = math.pi  # 管截面半圈
-
-    # ========================
-    # 3️⃣ 构造 Face
-    # ========================
-    face = BRepBuilderAPI_MakeFace(torus_surf, u1, u2, v1, v2).Face()
-
-    # ========================
-    # 4️⃣ 显示
-    # ========================
-    display, start_display, _, _ = init_display()
-    display.DisplayShape(face, update=True)
-    display.FitAll()
-    start_display()
-
-
 # ---------- 工具函数 ----------
 def compress_knots(knot_vec, tol=1e-12):
     """
@@ -353,15 +311,15 @@ def make_bspline_surface(surf_json):
             for j in range(n):
                 weights_arr.SetValue(i+1, j+1, w[i][j])
 
-    u_knots, u_mult = compress_knots(surf_json["uKnots"])
-    v_knots, v_mult = compress_knots(surf_json["vKnots"])
+    u_knot, u_mult = compress_knots(surf_json["uKnots"])
+    v_knot, v_mult = compress_knots(surf_json["vKnots"])
 
     if surf_json["isRational"]:
         surface = Geom_BSplineSurface(
             poles,
             weights_arr,
-            make_array1_real(u_knots),
-            make_array1_real(v_knots),
+            make_array1_real(u_knot),
+            make_array1_real(v_knot),
             make_array1_int(u_mult),
             make_array1_int(v_mult),
             round(surf_json["uDegree"]),
@@ -372,8 +330,8 @@ def make_bspline_surface(surf_json):
     else:
         surface = Geom_BSplineSurface(
             poles,
-            make_array1_real(u_knots),
-            make_array1_real(v_knots),
+            make_array1_real(u_knot),
+            make_array1_real(v_knot),
             make_array1_int(u_mult),
             make_array1_int(v_mult),
             round(surf_json["uDegree"]),
@@ -385,56 +343,44 @@ def make_bspline_surface(surf_json):
     return surface
 
 
-def make_edge_from_curve2d(curve_json, surface):
+def make_bspline_curve2d_edge(curve_json, surface):
     """
     利用从 json 中解析的信息，构造 OCCT 的 2d bspline curve
     从而形成 Face 的 pcurve
     """
-    pts = curve_json["controlPoints"]
-    degree = curve_json["degree"]
-    # OCCT 中的 periodic 和 onshape 中的 periodic 意义不一致，在 OCCT 中统一使用 periodic=false
-    # is_periodic = curve_json.get("isPeriodic", False)
-    is_rational = curve_json.get("isRational", False)
-
     # ---------- poles ----------
-    poles = TColgp_Array1OfPnt2d(1, len(pts))
-    for i, (u, v) in enumerate(pts):
+    ctrl = curve_json["controlPoints"]
+    poles = TColgp_Array1OfPnt2d(1, len(ctrl))
+    for i, (u, v) in enumerate(ctrl):
         poles.SetValue(i + 1, gp_Pnt2d(float(u), float(v)))
 
     # ---------- knots ----------
-    knots, mults = compress_knots(curve_json["knots"])
-
-    knots_arr = TColStd_Array1OfReal(1, len(knots))
-    mults_arr = TColStd_Array1OfInteger(1, len(mults))
-    for i, k in enumerate(knots):
-        knots_arr.SetValue(i + 1, float(k))
-        mults_arr.SetValue(i + 1, round(mults[i]))
+    knot, mult = compress_knots(curve_json["knots"])
 
     # ---------- weights ----------
     weights_arr = None
+    is_rational = curve_json.get("isRational", False)
     if is_rational:
         w = curve_json["weights"]
-        weights_arr = TColStd_Array1OfReal(1, len(w))
-        for i, val in enumerate(w):
-            weights_arr.SetValue(i + 1, float(val))
+        weights_arr = make_array1_real(w)
 
     # ---------- build curve ----------
     if is_rational:
         pcurve = Geom2d_BSplineCurve(
             poles,
             weights_arr,
-            knots_arr,
-            mults_arr,
-            round(degree),
-            False
+            make_array1_real(knot),
+            make_array1_int(mult),
+            round(curve_json["degree"]),
+            False # OCCT 中的 periodic 和 onshape 中的 periodic 意义不一致，在 OCCT 中统一使用 periodic=false
         )
     else:
         pcurve = Geom2d_BSplineCurve(
             poles,
-            knots_arr,
-            mults_arr,
-            round(degree),
-            False
+            make_array1_real(knot),
+            make_array1_int(mult),
+            round(curve_json["degree"]),
+            False # OCCT 中的 periodic 和 onshape 中的 periodic 意义不一致，在 OCCT 中统一使用 periodic=false
         )
 
     return BRepBuilderAPI_MakeEdge(pcurve, surface).Edge()
@@ -503,52 +449,6 @@ def make_bspline_face(bspline_face_json):
     surf_json = bspline_face_json["bSplineSurface"]
     surface = make_bspline_surface(surf_json)
 
-    # ctrl = surf["controlPoints"]
-    # m, n = len(ctrl), len(ctrl[0])
-    #
-    # poles = TColgp_Array2OfPnt(1, m, 1, n)
-    # for i in range(m):
-    #     for j in range(n):
-    #         x, y, z = ctrl[i][j]
-    #         poles.SetValue(i+1, j+1, gp_Pnt(x, y, z))
-    #
-    # weights_arr = None
-    # if surf["isRational"]:
-    #     w = surf["weights"]
-    #     weights_arr = TColStd_Array2OfReal(1, m, 1, n)
-    #     for i in range(m):
-    #         for j in range(n):
-    #             weights_arr.SetValue(i+1, j+1, w[i][j])
-    #
-    # u_knots, u_mult = compress_knots(surf["uKnots"])
-    # v_knots, v_mult = compress_knots(surf["vKnots"])
-    #
-    # if surf["isRational"]:
-    #     surface = Geom_BSplineSurface(
-    #         poles,
-    #         weights_arr,
-    #         make_array1_real(u_knots),
-    #         make_array1_real(v_knots),
-    #         make_array1_int(u_mult),
-    #         make_array1_int(v_mult),
-    #         round(surf["uDegree"]),
-    #         round(surf["vDegree"]),
-    #         False,
-    #         False
-    #     )
-    # else:
-    #     surface = Geom_BSplineSurface(
-    #         poles,
-    #         make_array1_real(u_knots),
-    #         make_array1_real(v_knots),
-    #         make_array1_int(u_mult),
-    #         make_array1_int(v_mult),
-    #         round(surf["uDegree"]),
-    #         round(surf["vDegree"]),
-    #         False,
-    #         False
-    #     )
-
     # ===== 2. 外边界 Wire =====
     if bspline_face_json["boundaryBSplineCurves"]:
         # 只有一个外环
@@ -560,14 +460,14 @@ def make_bspline_face(bspline_face_json):
         wire_builder = BRepBuilderAPI_MakeWire()
         # 一个外环可能由多条 bspline curve 组成
         for pcurve in outer_loop:
-            wire_builder.Add(make_edge_from_curve2d(pcurve, surface))
+            wire_builder.Add(make_bspline_curve2d_edge(pcurve, surface))
         outer_wire = wire_builder.Wire()
 
-        # ===== 3. 构造 Face =====
+    # ===== 3. 构造 Face =====
         face_builder = BRepBuilderAPI_MakeFace(surface, outer_wire, True)
 
     else:
-        # ===== 3. 构造 Face =====
+    # ===== 3. 构造 Face =====
         face_builder = BRepBuilderAPI_MakeFace(surface, True)
 
     # ===== 4. 内环 =====
@@ -581,7 +481,7 @@ def make_bspline_face(bspline_face_json):
 
         # 每个内环可能由多条 bspline curve 组成
         for pcurve in single_inner_loop:
-            wire_builder.Add(make_edge_from_curve2d(pcurve, surface))
+            wire_builder.Add(make_bspline_curve2d_edge(pcurve, surface))
         face_builder.Add(wire_builder.Wire())
 
     face = face_builder.Face()
