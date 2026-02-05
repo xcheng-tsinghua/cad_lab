@@ -1,17 +1,8 @@
 """
-登录onshape的配置文件：
-./config/onshape_credit.json
-
-文件内容示例：
-{
-  "onshape_url": "https://cad.onshape.com",
-  "access_key": "your_access_key",
-  "secret_key": "your_secret_key"
-}
+解析从 onshape 请求回来的模型数据
 
 ofs: onshape feature sequence 表示原始的从 onshape 上下载的文件内容的一部分
 Osp: onshape sequence parser 简写
-
 """
 import os
 from onshape.OnshapeClient import OnshapeClient

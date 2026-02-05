@@ -1,7 +1,6 @@
 """
 解析草图和各种建模命令获得的 区域、边、点 拓扑
 """
-
 from onshape.OspGeomBase import OspPoint, OspCoordSystem
 from onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
 from onshape import on_utils, macro
