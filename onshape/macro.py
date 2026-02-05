@@ -16,6 +16,7 @@ GLOBAL_UNIT = 'in'
 # SAVE_ROOT = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\test_ERSL'
 # SAVE_ROOT = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\ellipse'
 SAVE_ROOT = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\more_diverse_v2'
+os.makedirs(SAVE_ROOT, exist_ok=True)
 
 # 测试的文件连接
 # URL = 'https://cad.onshape.com/documents/f8d3a3b2ddfbc6077f810cbc/w/50c3f52b580a97326eb89747/e/a824129468cfbb9a5a7f6bd0'  # test_multi_cmd
@@ -24,5 +25,8 @@ SAVE_ROOT = r'D:\document\DeeplearningIdea\multi_cmd_seq_gen\more_diverse_v2'
 # URL = 'https://cad.onshape.com/documents/0575624a7945226d240f1670/w/2f450ba4e367f000ff5f815d/e/4ed65794bcc62b014b25b8b2'  # test_ERSL
 # URL = 'https://cad.onshape.com/documents/c5bbd3f741f95fa290774b8c/w/42b717e172b4e47d67acead6/e/03c03c8f59d106604452530b'  # ellipse
 URL = 'https://cad.onshape.com/documents/8f8d14d25311423bb8afcc72/w/4cbd9843ad184d99979a3e3c/e/91bc9e0d43a430b13453802d'  # more_diverse_v2
-os.makedirs(SAVE_ROOT, exist_ok=True)
+
+# 在 uv 空间中的误差上限
+UV_TOL = 1e-3
+
 

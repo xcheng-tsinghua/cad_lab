@@ -1,4 +1,5 @@
 from onshape import macro
+import numpy as np
 
 
 def get_unit_trans_coff(unit_name, power, trans_to):
@@ -23,7 +24,11 @@ def get_unit_trans_coff(unit_name, power, trans_to):
         raise NotImplementedError
 
 
-
+# def distance(arr1, arr2):
+#     """
+#     计算两个数组对应的向量之间的距离
+#     """
+#     return np.linalg.norm(np.asarray(arr1) - np.asarray(arr2))
 
 
 

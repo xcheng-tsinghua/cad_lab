@@ -1,3 +1,4 @@
+import math
 import os.path
 import random
 import shutil
@@ -733,9 +734,7 @@ if __name__ == '__main__':
     # vis_cst_pcd_single(r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend\train\rivet\trans13120.txt')
     # vis_pcd_gen()
 
-    # test_onshape_parser()
-
-    print(np.linalg.norm(np.array([1, 2, 3] - np.array([2, 3, 4]))))
+    test_onshape_parser()
 
     pass
 

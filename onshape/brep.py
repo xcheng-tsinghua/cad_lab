@@ -8,7 +8,6 @@ from OCC.Core.BRep import BRep_Builder
 from OCC.Core.BRepCheck import BRepCheck_Analyzer
 from OCC.Display.SimpleGui import init_display
 from OCC.Core.ElCLib import elclib
-import math
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d
 from OCC.Core.TColgp import TColgp_Array2OfPnt, TColgp_Array1OfPnt2d
 from OCC.Core.TColStd import TColStd_Array2OfReal, TColStd_Array1OfReal, TColStd_Array1OfInteger
@@ -16,6 +15,9 @@ from OCC.Core.Geom import Geom_BSplineSurface
 from OCC.Core.Geom2d import Geom2d_BSplineCurve
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeFace
 from OCC.Core.ShapeFix import ShapeFix_Face
+
+import math
+from onshape import macro
 
 
 def construct_arc_edge(center: gp_Pnt, normal: gp_Dir, radius: float, start_point: gp_Pnt, end_point: gp_Pnt):
@@ -438,23 +440,59 @@ def make_edge_from_curve2d(curve_json, surface):
     return BRepBuilderAPI_MakeEdge(pcurve, surface).Edge()
 
 
-def fix_bspline_loop(loop_bspline_list, tol=1e-4):
+def get_weld_point(point1, point2, tol):
+    """
+    计算两个点的焊接点，目前是两点中点
+    """
+    p_dist = math.dist(point1, point2)
+
+    if p_dist > tol:
+        raise ValueError(f'too large parameter tolerance: {p_dist}, please check!')
+
+    else:
+        weld_point = [(x + y) / 2 for x, y in zip(point1, point2)]
+        return weld_point
+
+
+def weld_bspline_loop(loop_bspline_list, tol):
     """
     修复由于近似而产生的参数域误差过大，导致 loop 不闭合的问题
+    目前做法是直接焊接到中点
     对于多条 pcurve，他们在列表中应该是首尾相连的
     对于一条 pcurve，它应该是首尾相连的
     """
+    n_loop_curve = len(loop_bspline_list)
     # 没有元素的情况，直接返回空数组
-    if not loop_bspline_list:
-        return []
+    if n_loop_curve == 0:
+        pass
 
-    # if len(loop_bspline_list == 1):
-    #     ctrl = loop_bspline_list[0]['controlPoints']
-    #
-    #     p_dist =
-    #
-    # for loop_bspline in loop_bspline_list:
+    # loop 里只有一条 pcurve
+    elif n_loop_curve == 1:
+        ctrl = loop_bspline_list[0]['controlPoints']
 
+        # 计算焊接点
+        weld_point = get_weld_point(ctrl[0], ctrl[-1], tol)
+
+        # 将焊接点改写进原字典
+        loop_bspline_list[0]['controlPoints'][0] = weld_point
+        loop_bspline_list[0]['controlPoints'][-1] = weld_point
+
+    # loop 里只有多条 pcurve
+    else:
+        for i in range(n_loop_curve):
+            i_next = 0 if i == n_loop_curve - 1 else i + 1
+
+            bspline_this = loop_bspline_list[i]
+            bspline_next = loop_bspline_list[i_next]
+
+            # 计算焊接点
+            this_end_weld_next_start = get_weld_point(bspline_this['controlPoints'][-1], bspline_next['controlPoints'][0], tol)
+
+            # 将焊接点改写进原字典
+            loop_bspline_list[i]['controlPoints'][-1] = this_end_weld_next_start
+            loop_bspline_list[i_next]['controlPoints'][0] = this_end_weld_next_start
+
+    return loop_bspline_list
 
 
 def make_bspline_face(bspline_face_json):
@@ -516,6 +554,9 @@ def make_bspline_face(bspline_face_json):
         # 只有一个外环
         outer_loop = bspline_face_json["boundaryBSplineCurves"]
 
+        # 修复 loop 的始末点，防止因误差导致重构失败
+        outer_loop = weld_bspline_loop(outer_loop, macro.UV_TOL)
+
         wire_builder = BRepBuilderAPI_MakeWire()
         # 一个外环可能由多条 bspline curve 组成
         for pcurve in outer_loop:
@@ -533,6 +574,9 @@ def make_bspline_face(bspline_face_json):
     inner_loops = bspline_face_json['innerLoopBSplineCurves']
     # 可能有多个内环
     for single_inner_loop in inner_loops:
+        # 修复 loop 的始末点，防止因误差导致重构失败
+        single_inner_loop = weld_bspline_loop(single_inner_loop, macro.UV_TOL)
+
         wire_builder = BRepBuilderAPI_MakeWire()
 
         # 每个内环可能由多条 bspline curve 组成
