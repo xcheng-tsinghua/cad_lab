@@ -8,6 +8,7 @@ from OCC.Core.Geom import Geom_BSplineSurface
 from OCC.Core.Geom2d import Geom2d_BSplineCurve
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeFace
 from OCC.Core.ShapeFix import ShapeFix_Face
+from OCC.Display.SimpleGui import init_display
 
 import math
 from onshape import macro
@@ -254,5 +255,11 @@ def make_bspline_face(bspline_face_json):
     fixer.Perform()
 
     return fixer.Face()
+
+
+def display(entity_list):
+    display, start_display, _, _ = init_display()
+    display.DisplayShape(entity_list, update=True)
+    start_display()
 
 

@@ -205,9 +205,7 @@ def test_parse_bspline_face():
     with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
         json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
 
-    display, start_display, _, _ = init_display()
-    display.DisplayShape(all_parsed_face, update=True)
-    start_display()
+    brep.display(all_parsed_face)
 
 
 def parse_onshape_topology(
