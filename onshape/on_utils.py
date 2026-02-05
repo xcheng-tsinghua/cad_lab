@@ -1,4 +1,4 @@
-from functional.onshape import macro
+from onshape import macro
 
 
 def get_unit_trans_coff(unit_name, power, trans_to):

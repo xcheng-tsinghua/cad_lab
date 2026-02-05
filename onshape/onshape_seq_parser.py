@@ -14,12 +14,13 @@ Osp: onshape sequence parser 简写
 
 """
 import os
-from functional.onshape.OnshapeClient import OnshapeClient
-from functional.onshape import topology_parser, brep
+from onshape.OnshapeClient import OnshapeClient
+from onshape import topology_parser
+from onshape import brep
 import matplotlib.pyplot as plt
-from functional.onshape import macro
-from functional.onshape.OspGeomBase import point_list_to_numpy
-from functional.onshape.OperationParser import Extrude, Revolve, Sweep, Loft
+from onshape import macro
+from onshape.OspGeomBase import point_list_to_numpy
+from onshape.OperationParser import Extrude, Revolve, Sweep, Loft
 import json
 from OCC.Display.SimpleGui import init_display
 

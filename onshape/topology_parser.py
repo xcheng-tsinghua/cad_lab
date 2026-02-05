@@ -2,10 +2,10 @@
 解析草图和各种建模命令获得的 区域、边、点 拓扑
 """
 
-from functional.onshape.OspGeomBase import OspPoint, OspCoordSystem
-from functional.onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
-from functional.onshape import on_utils, macro
-from colorama import Fore, Back, Style
+from onshape.OspGeomBase import OspPoint, OspCoordSystem
+from onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
+from onshape import on_utils, macro
+from colorama import Fore, Style
 
 
 def parse_vert_dict(sketch_topology):

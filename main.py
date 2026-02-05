@@ -5,7 +5,7 @@ import shutil
 import numpy as np
 
 from functional import file_system, step
-from functional.onshape import onshape_seq_parser
+from onshape import onshape_seq_parser
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import Image

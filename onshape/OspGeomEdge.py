@@ -2,7 +2,7 @@
 表示直线，
 """
 import math
-from functional.onshape.OspGeomBase import OspPoint, OspCoordSystem
+from onshape.OspGeomBase import OspPoint, OspCoordSystem
 import numpy as np
 from scipy.interpolate import BSpline
 
