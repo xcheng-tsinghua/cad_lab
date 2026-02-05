@@ -181,6 +181,17 @@ def in_a_not_in_b(a, b):
     return diff_a
 
 
+def trans_bspline_face_list(face_bspline_param):
+    """
+    将一组包含 face_bspline_param 参数的列表转换为 Face 列表
+    """
+    bspline_face = []
+    for item in face_bspline_param:
+        bspline_face.append(brep.make_bspline_face(item['approximateBSplineSurface']))
+
+    return bspline_face
+
+
 def test_parse_bspline_face():
     topo_ofs_file = os.path.join(macro.SAVE_ROOT, 'operation_topo_rollback_14.json')
     with open(topo_ofs_file, 'r') as f:
@@ -198,9 +209,7 @@ def test_parse_bspline_face():
         topo_parsed_all['edges'].extend(topo_parsed['edges'])
         topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
 
-        for topoface in topo_parsed['faces']:
-            if 'approximateBSplineSurface' in topoface.keys():
-                all_parsed_face.append(brep.make_bspline_face(topoface['approximateBSplineSurface']))
+        all_parsed_face.extend(trans_bspline_face_list(topo_parsed['faces']))
 
     with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
         json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
@@ -277,7 +286,8 @@ def parse_onshape_topology(
     # 获取全部边
     edge_dict = topology_parser.parse_edge_dict(topo_parsed_all, vert_dict)
 
-    # 获取全部区域
+    # 获取全部面
+    # 实测 Face 中包含 Region，因此这里不考虑 Region
     face_dict = topology_parser.parse_face_dict(topo_parsed_all, edge_dict)
 
     # 显示各建模操作的所需元素

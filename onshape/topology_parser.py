@@ -147,7 +147,6 @@ def parse_edge_end_points_by_id(point_id_list: list[str], vertices_topo_dict: di
         point_list = (None, None)
 
     else:
-
         for item in point_id_list:
             point_parsed = vertices_topo_dict[item]
             point_list.append(point_parsed)
@@ -175,34 +174,34 @@ def parse_feat_topo(val2nd_ofs):
 
                 if elem_type == 'param':
                     if val2nd_item_type in ('faces', 'regions'):
-                        v = parse_face_msg(val6th_ofs)
+                        value = parse_face_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'edges':
-                        v = parse_edge_msg(val6th_ofs)
+                        value = parse_edge_msg(val6th_ofs)
 
                     elif val2nd_item_type == 'vertices':
-                        v = parse_last_msg_val_list(val6th_ofs['message']['value'])
+                        value = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
                     else:
                         raise NotImplementedError(f'elem not supported: {val2nd_item_type}')
 
                 elif elem_type in ('vertices', 'edges', 'faces'):
-                    v = parse_last_id(val6th_ofs['message']['value'])
+                    value = parse_last_id(val6th_ofs['message']['value'])
 
                 elif elem_type == 'id':
-                    v = val6th_ofs['message']['value']
+                    value = val6th_ofs['message']['value']
 
-                elif elem_type == 'midpoint':
-                    v = parse_last_msg_val_list(val6th_ofs['message']['value'])
+                elif elem_type == 'midpoint':  # TODO: midpoint should be midPoint, alter this and OnshapeClient.py L290-291
+                    value = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
                 elif elem_type == 'approximateBSplineSurface':
-                    v = parse_bspline_face(val6th_ofs['message']['value'])
+                    value = parse_bspline_face(val6th_ofs['message']['value'])
 
                 else:
                     print(Fore.RED + f'not considered key occurred: {elem_type}, parsed as [message][value]' + Style.RESET_ALL)
-                    v = val6th_ofs['message']['value']
+                    value = val6th_ofs['message']['value']
 
-                geo_dict[elem_type] = v
+                geo_dict[elem_type] = value
             outer_list.append(geo_dict)
 
         topo[val2nd_item_type] = outer_list
@@ -219,23 +218,23 @@ def parse_body_msg(val6th_ofs):
     face_param = {}
 
     for val7th_item_ofs in val7th_ofs:
-        k = val7th_item_ofs['message']['key']['message']['value']
+        elem_type = val7th_item_ofs['message']['key']['message']['value']
         val9th_ofs = val7th_item_ofs['message']['value']['message']['value']
 
-        if k == 'coordSystem':
-            v = parse_coord_msg(val9th_ofs)
+        if elem_type == 'coordSystem':
+            value = parse_coord_msg(val9th_ofs)
 
-        elif k in ('normal', 'origin', 'x'):
-            v = parse_last_msg_val_list(val9th_ofs)
+        elif elem_type in ('normal', 'origin', 'x'):
+            value = parse_last_msg_val_list(val9th_ofs)
 
-        elif k in ('surfaceType', ):
-            v = val9th_ofs
+        elif elem_type in ('surfaceType', ):
+            value = val9th_ofs
 
         else:
-            print(Fore.RED + f'not considered key occurred: {k}, save directly' + Style.RESET_ALL)
-            v = val9th_ofs
+            print(Fore.RED + f'not considered body element type occurred: {elem_type}, save directly' + Style.RESET_ALL)
+            value = val9th_ofs
 
-        face_param[k] = v
+        face_param[elem_type] = value
 
     return face_param
 
@@ -249,46 +248,25 @@ def parse_face_msg(val6th_ofs):
     face_param = {}
 
     for val7th_item_ofs in val7th_ofs:
-        k = val7th_item_ofs['message']['key']['message']['value']
+        elem_type = val7th_item_ofs['message']['key']['message']['value']
         val9th_ofs = val7th_item_ofs['message']['value']['message']['value']
 
-        if k == 'coordSystem':
-            v = parse_coord_msg(val9th_ofs)
+        if elem_type == 'coordSystem':
+            value = parse_coord_msg(val9th_ofs)
 
-        elif k in ('normal', 'origin', 'x'):
-            v = parse_last_msg_val_list(val9th_ofs)
+        elif elem_type in ('normal', 'origin', 'x'):
+            value = parse_last_msg_val_list(val9th_ofs)
 
-        elif k in ('surfaceType', ):
-            v = val9th_ofs
+        elif elem_type in ('surfaceType', ):
+            value = val9th_ofs
 
         else:
-            print(Fore.RED + f'not considered key occurred: {k}, save directly' + Style.RESET_ALL)
-            v = val9th_ofs
+            print(Fore.RED + f'not considered face element type occurred: {elem_type}, save directly' + Style.RESET_ALL)
+            value = val9th_ofs
 
-        face_param[k] = v
+        face_param[elem_type] = value
 
     return face_param
-
-
-def parse_coord_msg(response):
-    """
-    parse coordSystem parameters from OnShape response data
-    """
-    coord_param = {}
-    for item in response:
-        k = item['message']['key']['message']['value']
-
-        v_msg = item['message']['value']['message']['value']
-
-        if k in ('origin', 'xAxis', 'zAxis'):
-            v = parse_last_msg_val_list(v_msg)
-
-        else:
-            print(Fore.RED + f'not considered key occurred: {k}, parsed as origin' + Style.RESET_ALL)
-            v = parse_last_msg_val_list(v_msg)
-
-        coord_param[k] = v
-    return coord_param
 
 
 def parse_edge_msg(val6th_ofs):
@@ -302,31 +280,52 @@ def parse_edge_msg(val6th_ofs):
     edge_topo = {}
 
     for val7th_item_ofs in val7th_ofs:
-        k = val7th_item_ofs['message']['key']['message']['value']  # 'coordSystem'
+        elem_type = val7th_item_ofs['message']['key']['message']['value']  # 'coordSystem'
         val9th_item_ofs = val7th_item_ofs['message']['value']['message']['value']
 
-        if k == 'curveType':
-            v = val9th_item_ofs
+        if elem_type == 'curveType':
+            value = val9th_item_ofs
 
-        elif k in ('direction', 'origin', 'knots', 'weights'):
-            v = parse_last_msg_val_list(val9th_item_ofs)
+        elif elem_type in ('direction', 'origin', 'knots', 'weights'):
+            value = parse_last_msg_val_list(val9th_item_ofs)
 
-        elif k == 'coordSystem':
-            v = parse_coord_msg(val9th_item_ofs)
+        elif elem_type == 'coordSystem':
+            value = parse_coord_msg(val9th_item_ofs)
 
-        elif k in ('radius', 'degree', 'dimension', 'isPeriodic', 'isRational', 'majorRadius', 'minorRadius'):
-            v = parse_last_msg_val(val7th_item_ofs['message']['value'])
+        elif elem_type in ('radius', 'degree', 'dimension', 'isPeriodic', 'isRational', 'majorRadius', 'minorRadius'):
+            value = parse_last_msg_val(val7th_item_ofs['message']['value'])
 
-        elif k == 'controlPoints':
-            v = parse_past_last_msg_val_list(val9th_item_ofs)
+        elif elem_type == 'controlPoints':
+            value = parse_past_last_msg_val_list(val9th_item_ofs)
 
         else:
-            print(Fore.RED + f'not considered key occurred: {k}, save directly' + Style.RESET_ALL)
-            v = val9th_item_ofs
+            print(Fore.RED + f'not considered edge element type occurred: {elem_type}, save directly' + Style.RESET_ALL)
+            value = val9th_item_ofs
 
-        edge_topo[k] = v
+        edge_topo[elem_type] = value
 
     return edge_topo
+
+
+def parse_coord_msg(response):
+    """
+    parse coordSystem parameters from OnShape response data
+    """
+    coord_param = {}
+    for item in response:
+        elem_type = item['message']['key']['message']['value']
+
+        v_msg = item['message']['value']['message']['value']
+
+        if elem_type in ('origin', 'xAxis', 'zAxis'):
+            value = parse_last_msg_val_list(v_msg)
+
+        else:
+            print(Fore.RED + f'not considered coordinate system element type occurred: {elem_type}, parsed as origin' + Style.RESET_ALL)
+            value = parse_last_msg_val_list(v_msg)
+
+        coord_param[elem_type] = value
+    return coord_param
 
 
 def parse_last_msg_val_list(last_msg_val_list_ofs):

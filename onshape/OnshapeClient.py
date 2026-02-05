@@ -220,7 +220,9 @@ class OnshapeClient(object):
                         topo.edges = [];
                         topo.vertices = [];
                         
-                        /* ---------- 0. Regions (regions only) ---------- */  // 区域列表，每个区域仅包含：区域的定义、区域id、该区域下的边id
+                        /* ---------- 0. Regions (regions only) ---------- */  
+                        // 区域列表，每个区域仅包含：区域的定义、区域id、该区域下的边id
+                        // 实测 Face 中包含 Region
                         var q_region = qSketchRegion(makeId(q_arr[l]));
                         var region_arr = evaluateQuery(context, q_region);
                         for (var i = 0; i < size(region_arr); i += 1) {
