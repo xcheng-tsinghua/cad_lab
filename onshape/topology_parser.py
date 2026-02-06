@@ -260,7 +260,7 @@ def parse_face_msg(val6th_ofs):
         elif elem_type in ('surfaceType', 'isRational', 'isUPeriodic', 'isVPeriodic', 'uDegree', 'vDegree'):
             value = val9th_ofs
 
-        elif elem_type in ('radius', 'minorRadius'):  # 可能是 tour，因此没有 major radius
+        elif elem_type in ('radius', 'minorRadius', 'halfAngle'):  # 可能是 tour，因此没有 major radius
             value = parse_last_msg_val(val7th_item_ofs['message']['value'])
 
         elif elem_type == 'controlPoints':

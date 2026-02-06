@@ -13,11 +13,17 @@ def get_unit_trans_coff(unit_name, power, trans_to):
     if unit_name == trans_to:
         return 1.0
 
-    elif unit_name == 'METER' and trans_to == 'in':
+    elif unit_name == 'METER' and trans_to[0] == 'in':
         return  macro.METER_TO_IN ** power
 
-    elif unit_name == 'in' and trans_to == 'METER':
+    elif unit_name == 'in' and trans_to[0] == 'METER':
         return  macro.IN_TO_METER ** power
+
+    elif unit_name == 'RADIAN' and trans_to[1] == 'DEGREE':
+        return macro.RADIAN_TO_DEGREE ** power
+
+    elif unit_name == 'DEGREE' and trans_to[1] == 'RADIAN':
+        return macro.DEGREE_TO_RADIAN ** power
 
     else:
         raise NotImplementedError

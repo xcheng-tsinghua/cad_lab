@@ -238,7 +238,6 @@ def parse_onshape_topology(
 
     # 获取全部拓扑
     topo_parsed_all = {'regions': [], 'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
-    seq_face = []
 
     # 全部已解析到的 entity id
     parsed_entity_id_all = []
@@ -257,6 +256,9 @@ def parse_onshape_topology(
         entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, roll_back_idx, is_load_topo, os.path.join(save_root, f'operation_topo_rollback_{idx + 1}.json'))
         parsed_entity_id_all.extend(extract_entity_ids(entity_topo))
 
+        # 全部已解析成 occt 的 face 的数组
+        face_occt = []
+
         val1st_ofs = entity_topo['result']['message']['value']
         for val1st_item_ofs in val1st_ofs:
             topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
@@ -267,7 +269,9 @@ def parse_onshape_topology(
             topo_parsed_all['edges'].extend(topo_parsed['edges'])
             topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
 
-            seq_face.append(topo_parsed['faces'])
+            face_occt.extend(trans_bspline_face_list(topo_parsed['faces']))
+
+        brep.display(face_occt)
 
     # 获取全部的建模操作参数
     operation_entities = get_operation_entities(feat_ofs)

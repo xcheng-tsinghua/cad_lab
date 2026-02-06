@@ -1,4 +1,5 @@
 import os
+import math
 
 # 米换算到英寸需要乘的系数
 METER_TO_IN = 39.3701
@@ -6,8 +7,15 @@ METER_TO_IN = 39.3701
 # 英寸换算到米需要乘的系数
 IN_TO_METER = 0.0254
 
-# 全局的单位 ['METER', 'in']
-GLOBAL_UNIT = 'in'
+# 弧度转化为角度需要乘的系数
+RADIAN_TO_DEGREE = 180.0/math.pi
+
+# 角度转化为弧度需要乘的系数
+DEGREE_TO_RADIAN = math.pi/180.0
+
+# 全局的单位 长度: ['METER', 'in'], 角度: ['RADIAN', 'DEGREE']
+# 前一个是长度单位，后一个是角度单位
+GLOBAL_UNIT = ('in', 'RADIAN')
 
 # 一些中间文件的保存文件夹
 # SAVE_ROOT = r'E:\document\DeeplearningIdea\multi_cmd_seq_gen\four_type_ofs'
