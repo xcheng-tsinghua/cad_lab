@@ -198,6 +198,7 @@ class OnshapeClient(object):
     def request_topo_roll_back_to(self, model_url, feat_id_list, roll_back_index, is_load, json_path):
         """
         获取回滚到某个建模步骤前的模型拓扑
+        回滚索引从0开始，索引为 0 表示一个特征都没有
         :param model_url:
         :param feat_id_list:
         :param roll_back_index:
@@ -341,16 +342,8 @@ class OnshapeClient(object):
 
     def request_render_roll_back_to(self, model_url, roll_back_index: int):
         """
-        将建模历史回滚到索引为roll_back_index的特征之前，索引从0开始
-
-        Args:
-            - did (str): Document ID
-            - wid (str): Workspace ID
-            - eid (str): Element ID
-            - feat_id (str): Feature ID of a sketch or operation
-
-        Returns:
-            - dict: a hierarchical parametric representation
+        将建模历史回滚到索引为roll_back_index的特征之前
+        回滚索引从0开始，索引为 0 表示一个特征都没有
         """
 
         body = {"rollbackIndex": roll_back_index}
@@ -358,7 +351,8 @@ class OnshapeClient(object):
         v_list = model_url.split("/")
         did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
-        res = self._api.request('post', f'/api/partstudios/d/{did}/w/{wid}/e/{eid}/features/rollback',
+        res = self._api.request('post',
+                                f'/api/partstudios/d/{did}/w/{wid}/e/{eid}/features/rollback',
                                 body=body)
         entity_topo = res.json()
         print(entity_topo)

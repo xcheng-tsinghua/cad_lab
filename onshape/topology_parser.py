@@ -254,11 +254,17 @@ def parse_face_msg(val6th_ofs):
         if elem_type == 'coordSystem':
             value = parse_coord_msg(val9th_ofs)
 
-        elif elem_type in ('normal', 'origin', 'x'):
+        elif elem_type in ('normal', 'origin', 'x', 'uKnots', 'vKnots'):
             value = parse_last_msg_val_list(val9th_ofs)
 
-        elif elem_type in ('surfaceType', ):
+        elif elem_type in ('surfaceType', 'isRational', 'isUPeriodic', 'isVPeriodic', 'uDegree', 'vDegree'):
             value = val9th_ofs
+
+        elif elem_type in ('radius', 'minorRadius'):  # 可能是 tour，因此没有 major radius
+            value = parse_last_msg_val(val7th_item_ofs['message']['value'])
+
+        elif elem_type == 'controlPoints':
+            value = parse_past_last_msg_val_list(val9th_ofs)
 
         else:
             print(Fore.RED + f'not considered face element type occurred: {elem_type}, save directly' + Style.RESET_ALL)
@@ -491,6 +497,7 @@ def parse_last_msg_val(last_value_ofs):
     """
     解析最深的仅需['message']['value']即可获取值的字典
     """
+    assert isinstance(last_value_ofs, dict)
     val_parsed = last_value_ofs['message']['value']
 
     # 如果该值有单位
