@@ -2,19 +2,21 @@
 构造或处理 BRep 数据
 """
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d
-from OCC.Core.TColgp import TColgp_Array2OfPnt, TColgp_Array1OfPnt2d
+from OCC.Core.TColgp import TColgp_Array2OfPnt, TColgp_Array1OfPnt2d, TColgp_Array1OfPnt
 from OCC.Core.TColStd import TColStd_Array2OfReal, TColStd_Array1OfReal, TColStd_Array1OfInteger
-from OCC.Core.Geom import Geom_BSplineSurface
+from OCC.Core.Geom import Geom_BSplineSurface, Geom_BSplineCurve
 from OCC.Core.Geom2d import Geom2d_BSplineCurve
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeFace
 from OCC.Core.ShapeFix import ShapeFix_Face
 from OCC.Display.SimpleGui import init_display
+from OCC.Core.gp import gp_Ax2, gp_Pnt, gp_Dir, gp_Circ, gp_Vec
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakePrism
 
 import math
-from onshape import macro
+from onshape import macro, on_utils
 
 
-def compress_knots(knot_vec, tol=1e-12):
+def compress_knots(knot_vec, tol=1e-6):
     """
     将节点向量转化为数值加重数，从而适应 OCCT 风格
     例如节点向量为:
@@ -31,6 +33,9 @@ def compress_knots(knot_vec, tol=1e-12):
             mults.append(1)
         else:
             mults[-1] += 1
+
+    knots = make_array1_real(knots)
+    mults = make_array1_int(mults)
     return knots, mults
 
 
@@ -54,76 +59,28 @@ def make_array1_int(vals):
     return arr
 
 
-def make_bspline_surface(surf_json):
-    """
-    利用从json中获取的信息构建 OCCT 的 bspline surface
-    """
-    ctrl = surf_json["controlPoints"]
-    m, n = len(ctrl), len(ctrl[0])
-
-    poles = TColgp_Array2OfPnt(1, m, 1, n)
-    for i in range(m):
-        for j in range(n):
-            x, y, z = ctrl[i][j]
-            poles.SetValue(i+1, j+1, gp_Pnt(x, y, z))
-
-    weights_arr = None
-    if surf_json["isRational"]:
-        w = surf_json["weights"]
-        weights_arr = TColStd_Array2OfReal(1, m, 1, n)
-        for i in range(m):
-            for j in range(n):
-                weights_arr.SetValue(i+1, j+1, w[i][j])
-
-    u_knot, u_mult = compress_knots(surf_json["uKnots"])
-    v_knot, v_mult = compress_knots(surf_json["vKnots"])
-
-    if surf_json["isRational"]:
-        surface = Geom_BSplineSurface(
-            poles,
-            weights_arr,
-            make_array1_real(u_knot),
-            make_array1_real(v_knot),
-            make_array1_int(u_mult),
-            make_array1_int(v_mult),
-            round(surf_json["uDegree"]),
-            round(surf_json["vDegree"]),
-            False,
-            False
-        )
-    else:
-        surface = Geom_BSplineSurface(
-            poles,
-            make_array1_real(u_knot),
-            make_array1_real(v_knot),
-            make_array1_int(u_mult),
-            make_array1_int(v_mult),
-            round(surf_json["uDegree"]),
-            round(surf_json["vDegree"]),
-            False,
-            False
-        )
-
-    return surface
-
-
-def make_bspline_curve2d_edge(curve_json, surface):
+def make_bspline_curve2d(curve_json):
     """
     利用从 json 中解析的信息，构造 OCCT 的 2d bspline curve
     从而形成 Face 的 pcurve
     """
-    # ---------- poles ----------
+    # ---------- parameters ----------
     ctrl = curve_json["controlPoints"]
+    degree = round(curve_json['degree'])
+    is_periodic = curve_json['isPeriodic']
+    is_rational = curve_json['isRational']
+    knot_raw = curve_json['knots']
+
+    # ---------- poles ----------
     poles = TColgp_Array1OfPnt2d(1, len(ctrl))
     for i, (u, v) in enumerate(ctrl):
         poles.SetValue(i + 1, gp_Pnt2d(float(u), float(v)))
 
     # ---------- knots ----------
-    knot, mult = compress_knots(curve_json["knots"])
+    knot, mult = compress_knots(knot_raw)
 
     # ---------- weights ----------
     weights_arr = None
-    is_rational = curve_json.get("isRational", False)
     if is_rational:
         w = curve_json["weights"]
         weights_arr = make_array1_real(w)
@@ -133,35 +90,96 @@ def make_bspline_curve2d_edge(curve_json, surface):
         pcurve = Geom2d_BSplineCurve(
             poles,
             weights_arr,
-            make_array1_real(knot),
-            make_array1_int(mult),
-            round(curve_json["degree"]),
-            False # OCCT 中的 periodic 和 onshape 中的 periodic 意义不一致，在 OCCT 中统一使用 periodic=false
+            knot,
+            mult,
+            degree,
+            False
         )
     else:
         pcurve = Geom2d_BSplineCurve(
             poles,
-            make_array1_real(knot),
-            make_array1_int(mult),
-            round(curve_json["degree"]),
-            False # OCCT 中的 periodic 和 onshape 中的 periodic 意义不一致，在 OCCT 中统一使用 periodic=false
+            knot,
+            mult,
+            degree,
+            False
         )
 
-    return BRepBuilderAPI_MakeEdge(pcurve, surface).Edge()
+    # onshape 的 periodic bspline curve 实际上是首尾相连的 bspline，因此需要通过 occt 函数转化
+    if is_periodic:
+        pcurve.SetPeriodic()
+
+    return pcurve
 
 
-def get_weld_point(point1, point2, tol):
+def make_bspline_surface(surf_json):
     """
-    计算两个点的焊接点，目前是两点中点
+    利用从json中获取的信息构建 OCCT 的 bspline surface
     """
-    p_dist = math.dist(point1, point2)
+    # ---------- parameters ----------
+    ctrl = surf_json["controlPoints"]
+    is_rational = surf_json['isRational']
+    is_u_periodic = surf_json['isUPeriodic']
+    is_v_periodic = surf_json['isVPeriodic']
+    degree_u = round(surf_json['uDegree'])
+    knot_raw_u = surf_json['uKnots']
+    degree_v = round(surf_json['vDegree'])
+    knot_raw_v = surf_json['vKnots']
 
-    if p_dist > tol:
-        raise ValueError(f'too large parameter tolerance: {p_dist}, please check!')
+    # ---------- poles ----------
+    m, n = len(ctrl), len(ctrl[0])
+    poles = TColgp_Array2OfPnt(1, m, 1, n)
+    for i in range(m):
+        for j in range(n):
+            x, y, z = ctrl[i][j]
+            poles.SetValue(i+1, j+1, gp_Pnt(x, y, z))
 
+    # ---------- weights ----------
+    weights_arr = None
+    if is_rational:
+        w = surf_json["weights"]
+        weights_arr = TColStd_Array2OfReal(1, m, 1, n)
+        for i in range(m):
+            for j in range(n):
+                weights_arr.SetValue(i+1, j+1, w[i][j])
+
+    # ---------- knots ----------
+    u_knot, u_mult = compress_knots(knot_raw_u)
+    v_knot, v_mult = compress_knots(knot_raw_v)
+
+    # ---------- make surface ----------
+    if surf_json["isRational"]:
+        surface = Geom_BSplineSurface(
+            poles,
+            weights_arr,
+            u_knot,
+            v_knot,
+            u_mult,
+            v_mult,
+            degree_u,
+            degree_v,
+            False,
+            False
+        )
     else:
-        weld_point = [(x + y) / 2 for x, y in zip(point1, point2)]
-        return weld_point
+        surface = Geom_BSplineSurface(
+            poles,
+            u_knot,
+            v_knot,
+            u_mult,
+            v_mult,
+            degree_u,
+            degree_v,
+            False,
+            False
+        )
+
+    if is_u_periodic:
+        surface.SetUPeriodic()
+
+    if is_v_periodic:
+        surface.SetVPeriodic()
+
+    return surface
 
 
 def weld_bspline_loop(loop_bspline_list, tol):
@@ -171,6 +189,20 @@ def weld_bspline_loop(loop_bspline_list, tol):
     对于多条 pcurve，他们在列表中应该是首尾相连的
     对于一条 pcurve，它应该是首尾相连的
     """
+    @on_utils.no_closure
+    def _get_weld_point(point1, point2, alert_tol):
+        """
+        计算两个点的焊接点，目前是两点中点
+        """
+        p_dist = math.dist(point1, point2)
+
+        if p_dist > alert_tol:
+            raise ValueError(f'too large parameter tolerance: {p_dist}, please check!')
+
+        else:
+            weld_target = [(x + y) / 2 for x, y in zip(point1, point2)]
+            return weld_target
+
     n_loop_curve = len(loop_bspline_list)
     # 没有元素的情况，直接返回空数组
     if n_loop_curve == 0:
@@ -181,7 +213,7 @@ def weld_bspline_loop(loop_bspline_list, tol):
         ctrl = loop_bspline_list[0]['controlPoints']
 
         # 计算焊接点
-        weld_point = get_weld_point(ctrl[0], ctrl[-1], tol)
+        weld_point = _get_weld_point(ctrl[0], ctrl[-1], tol)
 
         # 将焊接点改写进原字典
         loop_bspline_list[0]['controlPoints'][0] = weld_point
@@ -196,7 +228,7 @@ def weld_bspline_loop(loop_bspline_list, tol):
             bspline_next = loop_bspline_list[i_next]
 
             # 计算焊接点
-            this_end_weld_next_start = get_weld_point(bspline_this['controlPoints'][-1], bspline_next['controlPoints'][0], tol)
+            this_end_weld_next_start = _get_weld_point(bspline_this['controlPoints'][-1], bspline_next['controlPoints'][0], tol)
 
             # 将焊接点改写进原字典
             loop_bspline_list[i]['controlPoints'][-1] = this_end_weld_next_start
@@ -223,8 +255,10 @@ def make_bspline_face(bspline_face_json):
 
         wire_builder = BRepBuilderAPI_MakeWire()
         # 一个外环可能由多条 bspline curve 组成
-        for pcurve in outer_loop:
-            wire_builder.Add(make_bspline_curve2d_edge(pcurve, surface))
+        for pcurve_json in outer_loop:
+            pcurve = make_bspline_curve2d(pcurve_json)
+            pcurve_edge = BRepBuilderAPI_MakeEdge(pcurve, surface).Edge()
+            wire_builder.Add(pcurve_edge)
         outer_wire = wire_builder.Wire()
 
     # ===== 3. 构造 Face =====
@@ -244,8 +278,10 @@ def make_bspline_face(bspline_face_json):
         wire_builder = BRepBuilderAPI_MakeWire()
 
         # 每个内环可能由多条 bspline curve 组成
-        for pcurve in single_inner_loop:
-            wire_builder.Add(make_bspline_curve2d_edge(pcurve, surface))
+        for pcurve_json in single_inner_loop:
+            pcurve = make_bspline_curve2d(pcurve_json)
+            pcurve_edge = BRepBuilderAPI_MakeEdge(pcurve, surface).Edge()
+            wire_builder.Add(pcurve_edge)
         face_builder.Add(wire_builder.Wire())
 
     face = face_builder.Face()
@@ -257,9 +293,69 @@ def make_bspline_face(bspline_face_json):
     return fixer.Face()
 
 
-def display(entity_list):
+def show_entities(entity_list):
     display, start_display, _, _ = init_display()
     display.DisplayShape(entity_list, update=True)
+    start_display()
+
+
+def example_molding():
+    # ========== 1. 控制点 ==========
+    degree = 3
+
+    poles = TColgp_Array1OfPnt(1, 7)
+    poles.SetValue(1, gp_Pnt(0, 0, 0))
+    poles.SetValue(2, gp_Pnt(2, 1, 0))
+    poles.SetValue(3, gp_Pnt(4, -1, 0))
+    poles.SetValue(4, gp_Pnt(6, 0, 0))
+    poles.SetValue(5, gp_Pnt(4, 1, 0))
+    poles.SetValue(6, gp_Pnt(2, -1, 0))
+    poles.SetValue(7, gp_Pnt(0, 0, 0))  # 形成周期闭合趋势
+
+    # ========== 2. Knot 向量 ==========
+    knots = TColStd_Array1OfReal(1, 5)
+    knots.SetValue(1, 0.0)
+    knots.SetValue(2, 1.0)
+    knots.SetValue(3, 2.0)
+    knots.SetValue(4, 3.0)
+    knots.SetValue(5, 4.0)
+
+    # ========== 3. Multiplicities ==========
+    mults = TColStd_Array1OfInteger(1, 5)
+    mults.SetValue(1, 1)
+    mults.SetValue(2, 1)
+    mults.SetValue(3, 1)
+    mults.SetValue(4, 1)
+    mults.SetValue(5, 1)
+
+    # ========== 4. 构造 Periodic BSpline ==========
+    curve = Geom_BSplineCurve(
+        poles,
+        knots,
+        mults,
+        degree,
+        True  # periodic flag
+    )
+
+    # ========== 5. 生成 Edge ==========
+    edge = BRepBuilderAPI_MakeEdge(curve).Edge()
+
+    wire_builder = BRepBuilderAPI_MakeWire()
+    wire_builder.Add(edge)
+    wire = wire_builder.Wire()
+
+    face_builder = BRepBuilderAPI_MakeFace(wire)
+    face = face_builder.Face()
+
+    # 拉伸方向
+    vec = gp_Vec(0, 0, 10)
+
+    prism = BRepPrimAPI_MakePrism(face, vec)
+    solid = prism.Shape()
+
+    display, start_display, _, _ = init_display()
+
+    display.DisplayShape(solid, update=True)
     start_display()
 
 

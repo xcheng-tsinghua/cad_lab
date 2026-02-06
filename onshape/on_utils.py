@@ -29,5 +29,17 @@ def get_unit_trans_coff(unit_name, power, trans_to):
         raise NotImplementedError
 
 
+def no_closure(func):
+    """
+    标记该函数不允许捕获任何外层局部变量
+    """
+    free_vars = func.__code__.co_freevars
+    if free_vars:
+        raise RuntimeError(
+            f'Function {func.__qualname__} is declared no-closure, '
+            f'but captures outer variables: {free_vars}'
+        )
+    return func
+
 
 

@@ -599,6 +599,7 @@ def get_default_plane_id():
 
 def test_onshape_parser():
     onshape_seq_parser.parse_onshape_topology()
+    # onshape_seq_parser.test()
 
 
 def vis_cst_pcd_folder(target_dir = r'D:\document\DeepLearning\DataSet\pcd_cstnet2\Param20K_Extend2'):

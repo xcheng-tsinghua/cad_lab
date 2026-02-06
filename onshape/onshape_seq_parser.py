@@ -13,7 +13,6 @@ from onshape import macro
 from onshape.OspGeomBase import point_list_to_numpy
 from onshape.OperationParser import Extrude, Revolve, Sweep, Loft
 import json
-from OCC.Display.SimpleGui import init_display
 
 
 def plot_3d_sketch(sample_list):
@@ -192,7 +191,7 @@ def trans_bspline_face_list(face_bspline_param):
     return bspline_face
 
 
-def test_parse_bspline_face():
+def test():
     topo_ofs_file = os.path.join(macro.SAVE_ROOT, 'operation_topo_rollback_14.json')
     with open(topo_ofs_file, 'r') as f:
         entity_topo = json.load(f)
@@ -214,7 +213,7 @@ def test_parse_bspline_face():
     with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
         json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
 
-    brep.display(all_parsed_face)
+    brep.show_entities(all_parsed_face)
 
 
 def parse_onshape_topology(
@@ -271,7 +270,7 @@ def parse_onshape_topology(
 
             face_occt.extend(trans_bspline_face_list(topo_parsed['faces']))
 
-        brep.display(face_occt)
+        brep.show_entities(face_occt)
 
     # 获取全部的建模操作参数
     operation_entities = get_operation_entities(feat_ofs)
