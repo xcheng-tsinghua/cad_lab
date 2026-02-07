@@ -60,7 +60,7 @@ def parse_edge_dict(feature_topology, vert_dict):
             vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
 
             # 获取中点
-            midpoint = OspPoint.from_list(edge_topo_item['midpoint'])
+            midpoint = OspPoint.from_list(edge_topo_item['midPoint'])
 
             # 构造圆
             edge_parsed = OspCircle(coord_sys, radius, vertices[0], midpoint, vertices[1], edge_id)
@@ -79,7 +79,7 @@ def parse_edge_dict(feature_topology, vert_dict):
             vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
 
             # 获取中点
-            midpoint = OspPoint.from_list(edge_topo_item['midpoint'])
+            midpoint = OspPoint.from_list(edge_topo_item['midPoint'])
 
             # 构造椭圆
             edge_parsed = OspEllipse(coord_sys, major_radius, minor_radius, vertices[0], midpoint, vertices[1], edge_id)
@@ -248,7 +248,7 @@ def parse_feat_topo(val2nd_ofs):
                 elif elem_type == 'id':
                     value = val6th_ofs['message']['value']
 
-                elif elem_type == 'midpoint':  # TODO: midpoint should be midPoint, alter this and OnshapeClient.py L290-291
+                elif elem_type == 'midPoint':
                     value = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
                 elif elem_type == 'approximateBSplineSurface':

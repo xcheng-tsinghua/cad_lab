@@ -267,7 +267,7 @@ class OnshapeClient(object):
                             face_topo.param = evSurfaceDefinition(context, {face: face_arr[i]});
                             
                             // 获取近似的 BSpline Surface，便于重构曲面
-                            face_topo.approximateBSplineSurface = evApproximateBSplineSurface(context, {face: face_arr[i]});
+                            face_topo.approximateBSplineSurface = evApproximateBSplineSurface(context, {face: face_arr[i], tolerance: 1e-8});
                             
                             var q_edge = qAdjacent(face_arr[i], AdjacencyType.EDGE, EntityType.EDGE);
                             var edge_arr = evaluateQuery(context, q_edge);
@@ -287,10 +287,13 @@ class OnshapeClient(object):
                             edge_topo.id = edge_id;
                             edge_topo.vertices = [];
                             edge_topo.param = evCurveDefinition(context, {edge: edge_arr[j]});
+                            
+                            // 获取近似的 BSpline Curve，便于重构曲线
+                            edge_topo.approximateBSplineCurve = evApproximateBSplineCurve(context, {face: face_arr[i], tolerance: 1e-8});
 
                             // 获取Edge的中点，用于重构边
-                            var midpoint = evEdgeTangentLine(context, {edge: edge_arr[j], parameter: 0.5}).origin;
-                            edge_topo.midpoint = midpoint;
+                            var midPoint = evEdgeTangentLine(context, {edge: edge_arr[j], parameter: 0.5}).origin;
+                            edge_topo.midPoint = midPoint;
 
                             var q_vertex = qAdjacent(edge_arr[j], AdjacencyType.VERTEX, EntityType.VERTEX);
                             var vertex_arr = evaluateQuery(context, q_vertex);
