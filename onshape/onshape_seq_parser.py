@@ -20,7 +20,7 @@ from colorama import Fore, Style
 import json
 
 
-def plot_3d_sketch(sample_list):
+def plot_3d_sketch(sample_list, title):
     # 创建图形
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -32,15 +32,17 @@ def plot_3d_sketch(sample_list):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
+    plt.title(title)
 
     plt.show()
 
 
-def show_entity_ids(entity_ids, entities_all):
+def show_entity_ids(entity_ids, entities_all, title):
     """
     显示一组实体 id
     :param entity_ids:
     :param entities_all:
+    :param title:
     :return:
     """
     # 获取显示数据
@@ -63,55 +65,7 @@ def show_entity_ids(entity_ids, entities_all):
     for item in sample_points:
         points_numpy.append(point_list_to_numpy(item))
 
-    plot_3d_sketch(points_numpy)
-
-
-# def get_all_entity_ids(ofs, result=None):
-#     if result is None:
-#         result = []
-#
-#     if isinstance(ofs, dict):
-#         for k, v in ofs.items():
-#             if k == "geometryIds" and isinstance(v, list):
-#                 result.extend(v)
-#             else:
-#                 get_all_entity_ids(v, result)
-#
-#     elif isinstance(ofs, list):
-#         for item in ofs:
-#             get_all_entity_ids(item, result)
-#
-#     return result
-#
-#
-# def extract_entity_ids(node, out=None):
-#     if out is None:
-#         out = set()
-#
-#     if isinstance(node, dict):
-#         type_name = node.get("typeName")
-#
-#         # 关键：MapEntry
-#         if type_name == "BTFSValueMapEntry":
-#             key = node.get("message", {}).get("key", {})
-#             val = node.get("message", {}).get("value", {})
-#
-#             if (
-#                 key.get("typeName") == "BTFSValueString"
-#                 and key.get("message", {}).get("value") == "id"
-#                 and val.get("typeName") == "BTFSValueString"
-#             ):
-#                 out.add(val["message"]["value"])
-#
-#         # 递归所有字段
-#         for v in node.values():
-#             extract_entity_ids(v, out)
-#
-#     elif isinstance(node, list):
-#         for item in node:
-#             extract_entity_ids(item, out)
-#
-#     return out
+    plot_3d_sketch(points_numpy, title)
 
 
 def get_operation_cmds(feat_ofs):
@@ -158,7 +112,7 @@ def get_operation_cmds(feat_ofs):
             operation_cmd = OperationParser.Mirror.from_ofs(fea_item_ofs)
 
         elif fea_type in ('newSketch', 'cPlane'):  # 新建草图，构建参考面，不产生实体，无需构建建模步骤
-            operation_cmd = OperationParser.Mirror.from_ofs(fea_item_ofs)
+            operation_cmd = fea_item_ofs
 
         else:  # 其它未考虑到的建模步骤
             print(Fore.RED + f'not considered operation type: {fea_type}, save directively' + Style.RESET_ALL)
@@ -294,6 +248,7 @@ def parse_onshape_topology(
 
         # 解析到的拓扑实体需要合并前一步的拓扑实体，因为本次使用的拓扑实体可能是前面的建模步骤创建的
         # 如果解析到前面已解析的拓扑实体，本次依赖的拓扑实体以新的为准
+        # 但是明明请求的特征是到当前步所有的操作，理论上这次就能请求回全部实体信息，但实际上不是这样
         if idx == 0:
             entities_all = entities
             vert_ids_all = vert_ids
@@ -321,7 +276,7 @@ def parse_onshape_topology(
                 raise ValueError
             else:
                 print(Fore.GREEN + f'all required entity ids are already parsed' + Style.RESET_ALL)
-                # show_entity_ids(operation_cmd.required_geo, entities_all)
+                show_entity_ids(operation_cmd.required_geo, entities_all, feat_type)
 
             # for body_id in body_ids:
             #     entities_all[body_id].show()
