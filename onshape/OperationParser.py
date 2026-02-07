@@ -1,6 +1,7 @@
 """
 解析拉伸等建模命令参数
 """
+from colorama import Fore, Style
 
 
 def parse_feature_param(feat_item_msg_param_ofs):
@@ -32,7 +33,8 @@ def parse_feature_param(feat_item_msg_param_ofs):
                         param_value.extend(l_query['message']['geometryIds'])
 
         else:
-            raise NotImplementedError('param_msg:\n{}'.format(param_msg))
+            print(Fore.RED + f'not considered operation paramId: {param_id}, save directively')
+            # raise NotImplementedError('param_msg:\n{}'.format(param_msg))
 
         param_dict[param_id] = param_value
     return param_dict
@@ -474,6 +476,7 @@ class LinearPattern(object):
     """
     线性阵列，最多支持两个方向，不支持跳过实例
     仅支持实体阵列，不支持特征阵列
+    TODO: 基于特征的阵列
     """
     def __init__(self,
                  operation_type,
@@ -557,12 +560,15 @@ class LinearPattern(object):
             instance_count_two = None
             opposite_direction_two = None
 
-        return cls(operation_type, entities, direction_one, distance, instance_count, opposite_direction, direction_two, distance_two, instance_count_two, opposite_direction_two)
+        return cls(operation_type, entities,
+                   direction_one, distance, instance_count, opposite_direction,
+                   direction_two, distance_two, instance_count_two, opposite_direction_two)
 
 
 class CircularPattern(object):
     """
     圆周阵列，仅支持等间距，不支持跳过实例
+    TODO: 基于特征的阵列
     """
     def __init__(self, operation_type, entities, axis, angle, instance_count, opposite_direction):
         self.operation_type = operation_type

@@ -14,7 +14,9 @@ from onshape import on_utils
 import matplotlib.pyplot as plt
 from onshape import macro
 from onshape.OspGeomBase import point_list_to_numpy
-from onshape.OperationParser import Extrude, Revolve, Sweep, Loft
+from onshape import OperationParser
+from colorama import Fore, Style
+
 import json
 
 
@@ -49,7 +51,7 @@ def show_entity_ids(entity_ids, face_id_dict, edge_id_dict, vert_id_dict):
         # 是面的情况
         if entity_id in face_id_dict:
             face_entity = face_id_dict[entity_id]
-            for edge_entity in face_entity.edges:
+            for edge_entity in face_entity.edge_list:
                 sample_list = edge_entity.sample()
                 sample_points.append(point_list_to_numpy(sample_list))
 
@@ -115,37 +117,56 @@ def extract_entity_ids(node, out=None):
     return out
 
 
-def get_operation_entities(feat_ofs):
+def get_operation_cmds(feat_ofs):
     """
     获取全部建模操作实体
     :param feat_ofs:
     :return:
     """
-    operation_entity_all = []
+    operation_cmd_all = []
     for fea_item_ofs in feat_ofs['features']:
         fea_type = fea_item_ofs['message']['featureType']
 
-        if fea_type == 'newSketch':  # 新草图
-            continue
-
-        elif fea_type == 'extrude':  # 拉伸
-            operation_entity = Extrude.from_ofs(fea_item_ofs)
+        if fea_type == 'extrude':  # 拉伸
+            operation_cmd = OperationParser.Extrude.from_ofs(fea_item_ofs)
 
         elif fea_type == 'revolve':  # 旋转
-            operation_entity = Revolve.from_ofs(fea_item_ofs)
+            operation_cmd = OperationParser.Revolve.from_ofs(fea_item_ofs)
 
         elif fea_type == 'sweep':  # 扫描
-            operation_entity = Sweep.from_ofs(fea_item_ofs)
+            operation_cmd = OperationParser.Sweep.from_ofs(fea_item_ofs)
 
         elif fea_type == 'loft':  # 放样
-            operation_entity = Loft.from_ofs(fea_item_ofs)
+            operation_cmd = OperationParser.Loft.from_ofs(fea_item_ofs)
 
-        else:    # 圆角、倒角、阵列 ？
-            continue
+        elif fea_type == 'fillet':
+            operation_cmd = OperationParser.Fillet.from_ofs(fea_item_ofs)
 
-        operation_entity_all.append(operation_entity)
+        elif fea_type == 'chamfer':
+            operation_cmd = OperationParser.Chamfer.from_ofs(fea_item_ofs)
 
-    return operation_entity_all
+        elif fea_type == 'linearPattern':  # 线性阵列
+            operation_cmd = OperationParser.LinearPattern.from_ofs(fea_item_ofs)
+
+        elif fea_type == 'circularPattern':  # 圆周阵列
+            operation_cmd = OperationParser.CircularPattern.from_ofs(fea_item_ofs)
+
+        elif fea_type == 'draft':  # 拔模
+            operation_cmd = OperationParser.Draft.from_ofs(fea_item_ofs)
+
+        elif fea_type == 'rib':  # 拔模
+            operation_cmd = OperationParser.Rib.from_ofs(fea_item_ofs)
+
+        elif fea_type == 'mirror':  # 拔模
+            operation_cmd = OperationParser.Mirror.from_ofs(fea_item_ofs)
+
+        else:  # 'newSketch', 'cPlane'
+            print(Fore.RED + f'not considered operation type: {fea_type}, save directively' + Style.RESET_ALL)
+            operation_cmd = fea_item_ofs
+
+        operation_cmd_all.append(operation_cmd)
+
+    return operation_cmd_all
 
 
 def get_feat_id(feat_ofs):
@@ -199,7 +220,6 @@ def test():
     with open(topo_ofs_file, 'r') as f:
         entity_topo = json.load(f)
 
-    all_parsed_face = []
     topo_parsed_all = {'regions': [], 'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
     val1st_ofs = entity_topo['result']['message']['value']
     for val1st_item_ofs in val1st_ofs:
@@ -210,11 +230,6 @@ def test():
         topo_parsed_all['faces'].extend(topo_parsed['faces'])
         topo_parsed_all['edges'].extend(topo_parsed['edges'])
         topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
-
-        # all_parsed_face.extend(trans_bspline_face_list(topo_parsed['faces']))
-
-    # with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
-    #     json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
 
     # 获取全部拓扑信息
     vert_dict, edge_dict, face_dict, body_dict = topology_parser.parse_topo_dict(topo_parsed_all)
@@ -244,60 +259,83 @@ def parse_onshape_topology(
     all_feat_id, all_feat_type = get_feat_id(feat_ofs)
     print(f'number of all feat: {len(all_feat_id)}.')
 
-    # 获取全部拓扑
-    topo_parsed_all = {'regions': [], 'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
+    # 获取全部的建模操作参数
+    operation_cmd_list = get_operation_cmds(feat_ofs)
 
-    # 全部已解析到的 entity id
-    parsed_entity_id_all = []
+    # 获取全部拓扑
+    topo_parsed_all_step = []
 
     request_feat_id = []
-    for idx, (feat_id, feat_type) in enumerate(zip(all_feat_id, all_feat_type)):
+    for idx, (feat_id, feat_type, operation_cmd) in enumerate(zip(all_feat_id, all_feat_type, operation_cmd_list)):
         # 对于草图则可以合并到后面的建模操作一起请求，因为草图构建的实体不会被更改
         request_feat_id.append(feat_id)
 
         # 需要回滚到该特征构建之后
         roll_back_idx = idx + 1
 
-        # if feat_type in ('extrude', 'revolve', 'sweep', 'loft', 'fillet', 'chamfer', 'linearPattern', 'circularPattern', 'draft', 'rib', 'mirror'):
         # 向服务器请求当前操作下的模型拓扑
         # 感觉最好还是一个操作请求一次，否则可能遗漏信息，相比节省request，还是弄得完全些
-        entity_topo = onshape_client.request_topo_roll_back_to(model_url, request_feat_id, roll_back_idx, is_load_topo, os.path.join(save_root, f'operation_topo_rollback_{idx + 1}.json'))
-        parsed_entity_id_all.extend(extract_entity_ids(entity_topo))
+        entity_topo = onshape_client.request_topo_roll_back_to(
+            model_url,
+            request_feat_id,
+            roll_back_idx,
+            is_load_topo,
+            os.path.join(save_root, f'operation_topo_rollback_{idx + 1}.json')
+        )
 
-        # 全部已解析成 occt 的 face 的数组
-        face_occt = []
+        # 单步获得的拓扑实体
+        topo_parsed_step = {'regions': [], 'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
 
         val1st_ofs = entity_topo['result']['message']['value']
         for val1st_item_ofs in val1st_ofs:
             topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
 
-            topo_parsed_all['regions'].extend(topo_parsed['regions'])
-            topo_parsed_all['bodies'].extend(topo_parsed['bodies'])
-            topo_parsed_all['faces'].extend(topo_parsed['faces'])
-            topo_parsed_all['edges'].extend(topo_parsed['edges'])
-            topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
+            topo_parsed_step['regions'].extend(topo_parsed['regions'])
+            topo_parsed_step['bodies'].extend(topo_parsed['bodies'])
+            topo_parsed_step['faces'].extend(topo_parsed['faces'])
+            topo_parsed_step['edges'].extend(topo_parsed['edges'])
+            topo_parsed_step['vertices'].extend(topo_parsed['vertices'])
 
-            face_occt.extend(trans_bspline_face_list(topo_parsed['faces']))
+        # 解析全部依赖
+        vert_dict, edge_dict, face_dict, body_dict = topology_parser.parse_topo_dict(topo_parsed_step)
+        topo_parsed_all_step.append({'vert_dict': vert_dict,
+                                     'edge_dict': edge_dict,
+                                     'face_dict': face_dict,
+                                     'body_dict': body_dict}
+                                    )
+        # 显示实体
+        if feat_type in ('extrude', 'revolve', 'sweep', 'loft',
+                         'fillet', 'chamfer',
+                         'linearPattern', 'circularPattern',
+                         'draft', 'rib', 'mirror'
+                         ):
+            # 校验是否有操作需要但是未获取到的 id
+            parsed_entity_id_step = extract_entity_ids(entity_topo)
+            not_parsed = in_a_not_in_b(operation_cmd.required_geo, parsed_entity_id_step)
+            if not_parsed:
+                print(Fore.RED + f'not parsed entity ids: {not_parsed}' + Style.RESET_ALL)
+            else:
+                print(Fore.GREEN + f'all required entity ids are already parsed' + Style.RESET_ALL)
+                show_entity_ids(operation_cmd.required_geo, face_dict, edge_dict, vert_dict)
 
-        on_utils.show_entities(face_occt)
+            for _, osp_body in body_dict.items():
+                osp_body.show()
 
-    # 获取全部的建模操作参数
-    operation_entities = get_operation_entities(feat_ofs)
 
-    # 获取未获取但需要的实体 id
-    entity_ids_required = []
-    for operation_entity in operation_entities:
-        entity_ids_required.extend(operation_entity.required_geo)
-
-    not_parsed = in_a_not_in_b(entity_ids_required, parsed_entity_id_all)
-    print(f'not obtained topo ids: ', not_parsed)
-
-    # 获取全部拓扑信息
-    vert_dict, edge_dict, face_dict = topology_parser.parse_topo_dict(topo_parsed_all)
-
-    # 显示各建模操作的所需元素
-    for operation_entity in operation_entities:
-        show_entity_ids(operation_entity.required_geo, face_dict, edge_dict, vert_dict)
+    # # 获取未获取但需要的实体 id
+    # entity_ids_required = []
+    # for operation_entity in operation_entities:
+    #     entity_ids_required.extend(operation_entity.required_geo)
+    #
+    # not_parsed = in_a_not_in_b(entity_ids_required, parsed_entity_id_all)
+    # print(f'not obtained topo ids: ', not_parsed)
+    #
+    # # 获取全部拓扑信息
+    # vert_dict, edge_dict, face_dict = topology_parser.parse_topo_dict(topo_parsed_all)
+    #
+    # # 显示各建模操作的所需元素
+    # for operation_entity in operation_entities:
+    #     show_entity_ids(operation_entity.required_geo, face_dict, edge_dict, vert_dict)
 
 
 
