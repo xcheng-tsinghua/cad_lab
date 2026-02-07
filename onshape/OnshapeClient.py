@@ -215,6 +215,7 @@ class OnshapeClient(object):
                 '''
                     for (var l = 0; l < size(q_arr); l+= 1){
                         var topo = {};
+                        topo.featureId = q_arr[l];
                         topo.regions = [];
                         topo.bodies = [];
                         topo.faces = [];

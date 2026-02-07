@@ -3,11 +3,14 @@
 
 ofs: onshape feature sequence 表示原始的从 onshape 上下载的文件内容的一部分
 Osp: onshape sequence parser 简写
+info: 从json中初步解析到的信息，还需进一步处理成对象才可使用
+
+注意，即使是同一 id 的实体，在不同建模步骤下的状态可能也不同
 """
 import os
 from onshape.OnshapeClient import OnshapeClient
 from onshape import topology_parser
-from onshape import brep
+from onshape import on_utils
 import matplotlib.pyplot as plt
 from onshape import macro
 from onshape.OspGeomBase import point_list_to_numpy
@@ -180,15 +183,15 @@ def in_a_not_in_b(a, b):
     return diff_a
 
 
-def trans_bspline_face_list(face_bspline_param):
-    """
-    将一组包含 face_bspline_param 参数的列表转换为 Face 列表
-    """
-    bspline_face = []
-    for item in face_bspline_param:
-        bspline_face.append(brep.make_bspline_face(item['approximateBSplineSurface']))
-
-    return bspline_face
+# def trans_bspline_face_list(face_bspline_param):
+#     """
+#     将一组包含 face_bspline_param 参数的列表转换为 Face 列表
+#     """
+#     bspline_face = []
+#     for item in face_bspline_param:
+#         bspline_face.append(brep.make_bspline_face(item['approximateBSplineSurface']))
+#
+#     return bspline_face
 
 
 def test():
@@ -208,12 +211,18 @@ def test():
         topo_parsed_all['edges'].extend(topo_parsed['edges'])
         topo_parsed_all['vertices'].extend(topo_parsed['vertices'])
 
-        all_parsed_face.extend(trans_bspline_face_list(topo_parsed['faces']))
+        # all_parsed_face.extend(trans_bspline_face_list(topo_parsed['faces']))
 
-    with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
-        json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
+    # with open(os.path.join(macro.SAVE_ROOT, 'test_face_parse.json'), 'w') as f:
+    #     json.dump(topo_parsed_all, f, ensure_ascii=False, indent=4)
 
-    brep.show_entities(all_parsed_face)
+    # 获取全部拓扑信息
+    vert_dict, edge_dict, face_dict, body_dict = topology_parser.parse_topo_dict(topo_parsed_all)
+
+    for _, osp_body in body_dict.items():
+        osp_body.show()
+
+    on_utils.show_osp_face_dict(face_dict)
 
 
 def parse_onshape_topology(
@@ -270,7 +279,7 @@ def parse_onshape_topology(
 
             face_occt.extend(trans_bspline_face_list(topo_parsed['faces']))
 
-        brep.show_entities(face_occt)
+        on_utils.show_entities(face_occt)
 
     # 获取全部的建模操作参数
     operation_entities = get_operation_entities(feat_ofs)
@@ -283,15 +292,8 @@ def parse_onshape_topology(
     not_parsed = in_a_not_in_b(entity_ids_required, parsed_entity_id_all)
     print(f'not obtained topo ids: ', not_parsed)
 
-    # 获取全部角点
-    vert_dict = topology_parser.parse_vert_dict(topo_parsed_all)
-
-    # 获取全部边
-    edge_dict = topology_parser.parse_edge_dict(topo_parsed_all, vert_dict)
-
-    # 获取全部面
-    # 实测 Face 中包含 Region，因此这里不考虑 Region
-    face_dict = topology_parser.parse_face_dict(topo_parsed_all, edge_dict)
+    # 获取全部拓扑信息
+    vert_dict, edge_dict, face_dict = topology_parser.parse_topo_dict(topo_parsed_all)
 
     # 显示各建模操作的所需元素
     for operation_entity in operation_entities:

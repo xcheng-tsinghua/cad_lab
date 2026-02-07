@@ -2,29 +2,30 @@
 解析草图和各种建模命令获得的 区域、边、点 拓扑
 """
 from onshape.OspGeomBase import OspPoint, OspCoordSystem
-from onshape.OspGeomEdge import OspLine, OspCircle, OspEllipse, OspBSpline, OspFace
+from onshape.OspGeomCurve import OspLine, OspCircle, OspEllipse, OspBSpline
+from onshape.OspGeomEntity import OspFace, OspBody
 from onshape import on_utils, macro
 from colorama import Fore, Style
 
 
-def parse_vert_dict(sketch_topology):
+def parse_vert_dict(feature_topology):
     """
     将草图拓扑解析为 id 到具体点的映射
-    :param sketch_topology:
+    :param feature_topology:
     :return:
     """
-    vertices_topo_dict = {item['id']: OspPoint.from_list(item['param']) for item in sketch_topology['vertices']}
+    vertices_topo_dict = {item['id']: OspPoint.from_list(item['param']) for item in feature_topology['vertices']}
     return vertices_topo_dict
 
 
-def parse_edge_dict(sketch_topology, vert_dict):
+def parse_edge_dict(feature_topology, vert_dict):
     """
     将草图拓扑解析为 id 到具体边的映射
-    :param sketch_topology:
+    :param feature_topology:
     :param vert_dict:
     :return:
     """
-    edge_topo_list = sketch_topology['edges']
+    edge_topo_list = feature_topology['edges']
 
     edge_dict = {}
     for edge_topo_item in edge_topo_list:
@@ -117,22 +118,60 @@ def parse_edge_dict(sketch_topology, vert_dict):
     return edge_dict
 
 
-def parse_face_dict(sketch_topology, edge_dict):
+def parse_face_dict(feature_topology, edge_dict):
     """
     将草图拓扑转化为区域
-    :param sketch_topology:
+    :param feature_topology:
     :param edge_dict:
     :return:
     """
     # 将原始的 topology 解析为区域
-    region_dict = {}
-    for region_topo_item in sketch_topology['faces']:
-        region_edge_list = [edge_dict[edge_id] for edge_id in region_topo_item['edges']]
-        region_parsed = OspFace(region_edge_list, region_topo_item['id'])
+    face_dict = {}
+    for face_topo_item in feature_topology['faces']:
+        face_edge_list = [edge_dict[edge_id] for edge_id in face_topo_item['edges']]
+        face_parsed = OspFace(face_topo_item['approximateBSplineSurface'], face_edge_list, face_topo_item['id'])
 
-        region_dict[region_topo_item['id']] = region_parsed
+        face_dict[face_topo_item['id']] = face_parsed
 
-    return region_dict
+    return face_dict
+
+
+def parse_body_dict(feature_topology, face_dict):
+    """
+    获取实体信息
+    """
+    body_dict = {}
+    for body_topo_item in feature_topology['bodies']:
+        body_face_id_list = body_topo_item['faces']
+        if body_face_id_list:
+            body_id = body_topo_item['id']
+            bspline_face_list = [face_dict[face_id].bspline_face for face_id in body_face_id_list]
+
+            body_parsed = OspBody(bspline_face_list, body_id)
+            body_dict[body_id] = body_parsed
+
+    return body_dict
+
+
+def parse_topo_dict(topo_parsed_all):
+    """
+    将全部拓扑解析成 {id: topo} 的形式
+    通常需要将某个回滚状态下，全部建模特征构建的实体全部获取后，再调用该函数
+    """
+    # 获取全部角点
+    vert_dict = parse_vert_dict(topo_parsed_all)
+
+    # 获取全部边
+    edge_dict = parse_edge_dict(topo_parsed_all, vert_dict)
+
+    # 获取全部面
+    # 实测 Face 中包含 Region，因此这里不考虑 Region
+    face_dict = parse_face_dict(topo_parsed_all, edge_dict)
+
+    # 获取全部实体
+    body_dict = parse_body_dict(topo_parsed_all, face_dict)
+
+    return vert_dict, edge_dict, face_dict, body_dict
 
 
 def parse_edge_end_points_by_id(point_id_list: list[str], vertices_topo_dict: dict):
