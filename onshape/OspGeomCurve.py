@@ -218,8 +218,8 @@ class OspBSpline(object):
                  is_rational: bool,
                  knots: list[float],
                  weights: list[float],  # 非有理时为 None
-                 start_point: OspPoint,  # 闭合时为 None
-                 end_point: OspPoint,  # 闭合时为 None
+                 # start_point: OspPoint,  # 闭合时为 None
+                 # end_point: OspPoint,  # 闭合时为 None
                  topo_id: str,
                  ):
         """
@@ -233,9 +233,41 @@ class OspBSpline(object):
         self.is_rational = is_rational
         self.knots = knots
         self.weights = weights
-        self.start_point = start_point
-        self.end_point = end_point
+        # self.start_point = start_point
+        # self.end_point = end_point
         self.id = topo_id
+
+    @classmethod
+    def from_parsed_ofs(cls, bspline_curve_info, edge_id):
+        # 获取控制点坐标
+        ctrl_points_raw = bspline_curve_info['controlPoints']  # 二重数组，表示一系列点
+        ctrl_points = [OspPoint.from_list(point_coord) for point_coord in ctrl_points_raw]
+
+        # 获取次数
+        degree = round(bspline_curve_info['degree'])
+
+        # 获取 dimension
+        dimension = round(bspline_curve_info['dimension'])
+
+        # 获取 isPeriodic
+        is_periodic = bspline_curve_info['isPeriodic']
+
+        # 获取 isRational
+        is_rational = bspline_curve_info['isRational']
+
+        # 获取 knots
+        knots = bspline_curve_info['knots']
+
+        # 获取 weights
+        weights = bspline_curve_info['weights'] if is_rational else None
+
+        # # 获取端点
+        # vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
+
+        # 构造自由曲线
+        edge_parsed = OspBSpline(ctrl_points, degree, dimension, is_periodic, is_rational, knots, weights, edge_id)
+
+        return edge_parsed
 
     def sample(self, n_samples: int = 50) -> list[OspPoint]:
         """

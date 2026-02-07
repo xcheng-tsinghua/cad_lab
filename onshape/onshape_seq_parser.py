@@ -347,7 +347,7 @@ def parse_onshape_topology(
                 raise ValueError
             else:
                 print(Fore.GREEN + f'all required entity ids are already parsed' + Style.RESET_ALL)
-                # show_entity_ids(operation_cmd.required_geo, entities_all)
+                show_entity_ids(operation_cmd.required_geo, entities_all)
 
             # for body_id in body_ids:
             #     entities_all[body_id].show()

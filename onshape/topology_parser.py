@@ -85,39 +85,41 @@ def parse_edge_dict(feature_topology, vert_dict):
             edge_parsed = OspEllipse(coord_sys, major_radius, minor_radius, vertices[0], midpoint, vertices[1], edge_id)
 
         elif edge_type == 'SPLINE':
-            # 获取控制点坐标
-            ctrl_points_raw = edge_topo_item['param']['controlPoints']  # 二重数组，表示一系列点
-            ctrl_points = [OspPoint.from_list(point_coord) for point_coord in ctrl_points_raw]
-
-            # 获取次数
-            degree = round(edge_topo_item['param']['degree'])
-
-            # 获取 dimension
-            dimension = round(edge_topo_item['param']['dimension'])
-
-            # 获取 isPeriodic
-            is_periodic = edge_topo_item['param']['isPeriodic']
-
-            # 获取 isRational
-            is_rational = edge_topo_item['param']['isRational']
-
-            # 获取 knots
-            knots = edge_topo_item['param']['knots']
-
-            # 获取 weights
-            weights = edge_topo_item['param']['weights'] if is_rational else None
-
-            # 获取端点
-            vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
-
-            # 构造自由曲线
-            edge_parsed = OspBSpline(ctrl_points, degree, dimension, is_periodic, is_rational, knots, weights, vertices[0], vertices[1], edge_id)
+            edge_parsed = OspBSpline.from_parsed_ofs(edge_topo_item['param'], edge_id)
+            # # 获取控制点坐标
+            # ctrl_points_raw = edge_topo_item['param']['controlPoints']  # 二重数组，表示一系列点
+            # ctrl_points = [OspPoint.from_list(point_coord) for point_coord in ctrl_points_raw]
+            #
+            # # 获取次数
+            # degree = round(edge_topo_item['param']['degree'])
+            #
+            # # 获取 dimension
+            # dimension = round(edge_topo_item['param']['dimension'])
+            #
+            # # 获取 isPeriodic
+            # is_periodic = edge_topo_item['param']['isPeriodic']
+            #
+            # # 获取 isRational
+            # is_rational = edge_topo_item['param']['isRational']
+            #
+            # # 获取 knots
+            # knots = edge_topo_item['param']['knots']
+            #
+            # # 获取 weights
+            # weights = edge_topo_item['param']['weights'] if is_rational else None
+            #
+            # # 获取端点
+            # vertices = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
+            #
+            # # 构造自由曲线
+            # edge_parsed = OspBSpline(ctrl_points, degree, dimension, is_periodic, is_rational, knots, weights, vertices[0], vertices[1], edge_id)
 
         elif edge_type == 'OTHER':
             # 未知类型，直接解析为两个点
-            print(Fore.RED + 'edge type OTHER occurred, treated as LINE' + Style.RESET_ALL)
-            edge_points_parsed = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
-            edge_parsed = OspLine(edge_points_parsed[0], edge_points_parsed[1], edge_id)
+            print(Fore.RED + 'edge type OTHER occurred, treated as BSpline Curve' + Style.RESET_ALL)
+            # edge_points_parsed = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
+            # edge_parsed = OspLine(edge_points_parsed[0], edge_points_parsed[1], edge_id)
+            edge_parsed = OspBSpline.from_parsed_ofs(edge_topo_item['approximateBSplineCurve'], edge_id)
 
         else:
             raise NotImplementedError(f'unsupported edge type: {edge_type}')
@@ -219,47 +221,54 @@ def parse_feat_topo(val2nd_ofs):
         val4th_ofs = val2nd_item_ofs['message']['value']['message']['value']
         outer_list = []
 
-        for val4th_item_ofs in val4th_ofs:
-            # val4th_ofs: 每个元素代表 face、edge、vert 的一个元素
-            val5th_ofs = val4th_item_ofs['message']['value']
-            geo_dict = {}
+        if val2nd_item_type == 'featureId':
+            outer_list = val4th_ofs
 
-            for val5th_item_ofs in val5th_ofs:
-                # val5th_ofs: 每个元素代表 face、edge、vert 的一个具体属性，例如 id，坐标系等
-                elem_type = val5th_item_ofs['message']['key']['message']['value']  # ['id', 'faces',  'edges', 'vertices']
-                val6th_ofs = val5th_item_ofs['message']['value']
+        else:
+            for val4th_item_ofs in val4th_ofs:
+                # val4th_ofs: 每个元素代表 face、edge、vert 的一个元素
+                val5th_ofs = val4th_item_ofs['message']['value']
+                geo_dict = {}
 
-                if elem_type == 'param':
-                    if val2nd_item_type in ('faces', 'regions'):
-                        value = parse_face_msg(val6th_ofs)
+                for val5th_item_ofs in val5th_ofs:
+                    # val5th_ofs: 每个元素代表 face、edge、vert 的一个具体属性，例如 id，坐标系等
+                    elem_type = val5th_item_ofs['message']['key']['message']['value']  # ['id', 'faces',  'edges', 'vertices']
+                    val6th_ofs = val5th_item_ofs['message']['value']
 
-                    elif val2nd_item_type == 'edges':
-                        value = parse_edge_msg(val6th_ofs)
+                    if elem_type == 'param':
+                        if val2nd_item_type in ('faces', 'regions'):
+                            value = parse_face_msg(val6th_ofs)
 
-                    elif val2nd_item_type == 'vertices':
+                        elif val2nd_item_type == 'edges':
+                            value = parse_edge_msg(val6th_ofs)
+
+                        elif val2nd_item_type == 'vertices':
+                            value = parse_last_msg_val_list(val6th_ofs['message']['value'])
+
+                        else:
+                            raise NotImplementedError(f'elem not supported: {val2nd_item_type}')
+
+                    elif elem_type in ('vertices', 'edges', 'faces'):
+                        value = parse_last_id(val6th_ofs['message']['value'])
+
+                    elif elem_type == 'id':
+                        value = val6th_ofs['message']['value']
+
+                    elif elem_type == 'midPoint':
                         value = parse_last_msg_val_list(val6th_ofs['message']['value'])
 
+                    elif elem_type == 'approximateBSplineSurface':
+                        value = parse_bspline_face(val6th_ofs['message']['value'])
+
+                    elif elem_type == 'approximateBSplineCurve':
+                        value = parse_single_bspline_pcurve(val6th_ofs)
+
                     else:
-                        raise NotImplementedError(f'elem not supported: {val2nd_item_type}')
+                        print(Fore.RED + f'not considered key occurred: {elem_type}, parsed as [message][value]' + Style.RESET_ALL)
+                        value = val6th_ofs['message']['value']
 
-                elif elem_type in ('vertices', 'edges', 'faces'):
-                    value = parse_last_id(val6th_ofs['message']['value'])
-
-                elif elem_type == 'id':
-                    value = val6th_ofs['message']['value']
-
-                elif elem_type == 'midPoint':
-                    value = parse_last_msg_val_list(val6th_ofs['message']['value'])
-
-                elif elem_type == 'approximateBSplineSurface':
-                    value = parse_bspline_face(val6th_ofs['message']['value'])
-
-                else:
-                    print(Fore.RED + f'not considered key occurred: {elem_type}, parsed as [message][value]' + Style.RESET_ALL)
-                    value = val6th_ofs['message']['value']
-
-                geo_dict[elem_type] = value
-            outer_list.append(geo_dict)
+                    geo_dict[elem_type] = value
+                outer_list.append(geo_dict)
 
         topo[val2nd_item_type] = outer_list
 
@@ -509,6 +518,7 @@ def parse_single_bspline_pcurve(val9th_item_ofs):
     每个曲面边界可能有很多的边，这个函数解析其中一条边的 bspline pcurve 方程
     """
     val10th_ofs = val9th_item_ofs['message']['value']
+    assert isinstance(val10th_ofs, list)
 
     parsed_single_bspline_pcurve = {}
     for val10th_item_ofs in val10th_ofs:
@@ -524,7 +534,7 @@ def parse_single_bspline_pcurve(val9th_item_ofs):
             if elem_type == 'curveType':
                 assert val12th_ofs == 'SPLINE'
 
-        elif elem_type == 'knots':
+        elif elem_type in ('knots', 'weights'):
             parsed_single_bspline_pcurve[elem_type] = parse_last_msg_val_list(val12th_ofs)
 
         else:
