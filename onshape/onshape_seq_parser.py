@@ -63,73 +63,55 @@ def show_entity_ids(entity_ids, entities_all):
     for item in sample_points:
         points_numpy.append(point_list_to_numpy(item))
 
-        # # 是面的情况
-        # if entity_id in entities_all:
-        #     face_entity = entities_all[entity_id]
-        #     for edge_entity in face_entity.edge_list:
-        #         sample_list = edge_entity.sample()
-        #         sample_points.append(point_list_to_numpy(sample_list))
-        #
-        # elif entity_id in entities_all:
-        #     prim = entities_all[entity_id]
-        #     sample_list = prim.sample()
-        #     sample_points.append(point_list_to_numpy(sample_list))
-        #
-        # elif entity_id in entities_all:
-        #     print('vertex entity not shown')
-        #
-        # else:
-        #     raise ValueError(f'required entity id: {entity_id} not in any topo dict.')
-
     plot_3d_sketch(points_numpy)
 
 
-def get_all_entity_ids(ofs, result=None):
-    if result is None:
-        result = []
-
-    if isinstance(ofs, dict):
-        for k, v in ofs.items():
-            if k == "geometryIds" and isinstance(v, list):
-                result.extend(v)
-            else:
-                get_all_entity_ids(v, result)
-
-    elif isinstance(ofs, list):
-        for item in ofs:
-            get_all_entity_ids(item, result)
-
-    return result
-
-
-def extract_entity_ids(node, out=None):
-    if out is None:
-        out = set()
-
-    if isinstance(node, dict):
-        type_name = node.get("typeName")
-
-        # 关键：MapEntry
-        if type_name == "BTFSValueMapEntry":
-            key = node.get("message", {}).get("key", {})
-            val = node.get("message", {}).get("value", {})
-
-            if (
-                key.get("typeName") == "BTFSValueString"
-                and key.get("message", {}).get("value") == "id"
-                and val.get("typeName") == "BTFSValueString"
-            ):
-                out.add(val["message"]["value"])
-
-        # 递归所有字段
-        for v in node.values():
-            extract_entity_ids(v, out)
-
-    elif isinstance(node, list):
-        for item in node:
-            extract_entity_ids(item, out)
-
-    return out
+# def get_all_entity_ids(ofs, result=None):
+#     if result is None:
+#         result = []
+#
+#     if isinstance(ofs, dict):
+#         for k, v in ofs.items():
+#             if k == "geometryIds" and isinstance(v, list):
+#                 result.extend(v)
+#             else:
+#                 get_all_entity_ids(v, result)
+#
+#     elif isinstance(ofs, list):
+#         for item in ofs:
+#             get_all_entity_ids(item, result)
+#
+#     return result
+#
+#
+# def extract_entity_ids(node, out=None):
+#     if out is None:
+#         out = set()
+#
+#     if isinstance(node, dict):
+#         type_name = node.get("typeName")
+#
+#         # 关键：MapEntry
+#         if type_name == "BTFSValueMapEntry":
+#             key = node.get("message", {}).get("key", {})
+#             val = node.get("message", {}).get("value", {})
+#
+#             if (
+#                 key.get("typeName") == "BTFSValueString"
+#                 and key.get("message", {}).get("value") == "id"
+#                 and val.get("typeName") == "BTFSValueString"
+#             ):
+#                 out.add(val["message"]["value"])
+#
+#         # 递归所有字段
+#         for v in node.values():
+#             extract_entity_ids(v, out)
+#
+#     elif isinstance(node, list):
+#         for item in node:
+#             extract_entity_ids(item, out)
+#
+#     return out
 
 
 def get_operation_cmds(feat_ofs):
@@ -175,7 +157,10 @@ def get_operation_cmds(feat_ofs):
         elif fea_type == 'mirror':  # 拔模
             operation_cmd = OperationParser.Mirror.from_ofs(fea_item_ofs)
 
-        else:  # 'newSketch', 'cPlane'
+        elif fea_type in ('newSketch', 'cPlane'):  # 新建草图，构建参考面，不产生实体，无需构建建模步骤
+            operation_cmd = OperationParser.Mirror.from_ofs(fea_item_ofs)
+
+        else:  # 其它未考虑到的建模步骤
             print(Fore.RED + f'not considered operation type: {fea_type}, save directively' + Style.RESET_ALL)
             operation_cmd = fea_item_ofs
 
@@ -217,17 +202,6 @@ def in_a_not_in_b(a, b):
     b = set(b)
     diff_a = list(a - b)
     return diff_a
-
-
-# def trans_bspline_face_list(face_bspline_param):
-#     """
-#     将一组包含 face_bspline_param 参数的列表转换为 Face 列表
-#     """
-#     bspline_face = []
-#     for item in face_bspline_param:
-#         bspline_face.append(brep.make_bspline_face(item['approximateBSplineSurface']))
-#
-#     return bspline_face
 
 
 def test():
@@ -281,7 +255,7 @@ def parse_onshape_topology(
     # 获取全部的建模操作参数
     operation_cmd_list = get_operation_cmds(feat_ofs)
 
-    # 获取全部拓扑
+    # 获取的全部拓扑
     entities_all = vert_ids_all = edge_ids_all = face_ids_all = body_ids_all = None
 
     request_feat_id = []
@@ -302,21 +276,21 @@ def parse_onshape_topology(
             os.path.join(save_root, f'operation_topo_rollback_{roll_back_idx}.json')
         )
 
-        # 单步获得的拓扑实体
-        topo_parsed_step = {'regions': [], 'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
+        # 截止到当前操作步骤获得的拓扑实体
+        topo_parsed_now = {'bodies': [], 'faces': [], 'edges': [], 'vertices': []}
 
         val1st_ofs = entity_topo['result']['message']['value']
         for val1st_item_ofs in val1st_ofs:
             topo_parsed = topology_parser.parse_feat_topo(val1st_item_ofs['message']['value'])
 
-            topo_parsed_step['regions'].extend(topo_parsed['regions'])
-            topo_parsed_step['bodies'].extend(topo_parsed['bodies'])
-            topo_parsed_step['faces'].extend(topo_parsed['faces'])
-            topo_parsed_step['edges'].extend(topo_parsed['edges'])
-            topo_parsed_step['vertices'].extend(topo_parsed['vertices'])
+            # topo_parsed_step['regions'].extend(topo_parsed['regions'])
+            topo_parsed_now['bodies'].extend(topo_parsed['bodies'])
+            topo_parsed_now['faces'].extend(topo_parsed['faces'])
+            topo_parsed_now['edges'].extend(topo_parsed['edges'])
+            topo_parsed_now['vertices'].extend(topo_parsed['vertices'])
 
         # 解析本次获取的全部实体
-        entities, vert_ids, edge_ids, face_ids, body_ids = topology_parser.parse_topo_dict(topo_parsed_step)
+        entities, vert_ids, edge_ids, face_ids, body_ids = topology_parser.parse_topo_dict(topo_parsed_now)
 
         # 解析到的拓扑实体需要合并前一步的拓扑实体，因为本次使用的拓扑实体可能是前面的建模步骤创建的
         # 如果解析到前面已解析的拓扑实体，本次依赖的拓扑实体以新的为准
@@ -347,26 +321,10 @@ def parse_onshape_topology(
                 raise ValueError
             else:
                 print(Fore.GREEN + f'all required entity ids are already parsed' + Style.RESET_ALL)
-                show_entity_ids(operation_cmd.required_geo, entities_all)
+                # show_entity_ids(operation_cmd.required_geo, entities_all)
 
             # for body_id in body_ids:
             #     entities_all[body_id].show()
-
-
-    # # 获取未获取但需要的实体 id
-    # entity_ids_required = []
-    # for operation_entity in operation_entities:
-    #     entity_ids_required.extend(operation_entity.required_geo)
-    #
-    # not_parsed = in_a_not_in_b(entity_ids_required, parsed_entity_id_all)
-    # print(f'not obtained topo ids: ', not_parsed)
-    #
-    # # 获取全部拓扑信息
-    # vert_dict, edge_dict, face_dict = topology_parser.parse_topo_dict(topo_parsed_all)
-    #
-    # # 显示各建模操作的所需元素
-    # for operation_entity in operation_entities:
-    #     show_entity_ids(operation_entity.required_geo, face_dict, edge_dict, vert_dict)
 
 
 
