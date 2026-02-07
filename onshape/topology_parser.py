@@ -115,10 +115,8 @@ def parse_edge_dict(feature_topology, vert_dict):
             # edge_parsed = OspBSpline(ctrl_points, degree, dimension, is_periodic, is_rational, knots, weights, vertices[0], vertices[1], edge_id)
 
         elif edge_type == 'OTHER':
-            # 未知类型，直接解析为两个点
-            print(Fore.RED + 'edge type OTHER occurred, treated as BSpline Curve' + Style.RESET_ALL)
-            # edge_points_parsed = parse_edge_end_points_by_id(edge_topo_item['vertices'], vert_dict)
-            # edge_parsed = OspLine(edge_points_parsed[0], edge_points_parsed[1], edge_id)
+            # 未知类型，统一解析成 BSpline Curve
+            # print(Fore.RED + 'edge type OTHER occurred, treated as BSpline Curve' + Style.RESET_ALL)
             edge_parsed = OspBSpline.from_parsed_ofs(edge_topo_item['approximateBSplineCurve'], edge_id)
 
         else:
