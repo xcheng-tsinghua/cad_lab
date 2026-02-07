@@ -21,7 +21,7 @@ def get_unit_trans_coff(unit_name, power, trans_to):
     :return:
     """
     # 转换相同，不必转换
-    if unit_name == trans_to:
+    if unit_name == trans_to[0] or unit_name == trans_to[1]:
         return 1.0
 
     elif unit_name == 'METER' and trans_to[0] == 'in':
@@ -38,6 +38,25 @@ def get_unit_trans_coff(unit_name, power, trans_to):
 
     else:
         raise NotImplementedError
+
+
+
+
+
+def batch_upsert_by_id(arr, new_items, target_key='id'):
+    """
+    新数组加入到旧数组时，先判断新数组内 'id' 对应的值是否在原数组已包含
+    如果已包含，则更新，否则直接加入到旧数组
+    """
+    # 1️⃣ 先把原数组变成 id → dict 的索引
+    index = {item[target_key]: item for item in arr}
+
+    # 2️⃣ 批量更新 / 插入（自动替换同 id）
+    for item in new_items:
+        index[item[target_key]] = item
+
+    # 3️⃣ 如需要 list 结构再转回
+    return list(index.values())
 
 
 def no_closure(func):

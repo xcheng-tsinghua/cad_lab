@@ -1,4 +1,6 @@
 import math
+from typing import Self
+
 import numpy as np
 
 
@@ -137,6 +139,22 @@ class OspPoint(object):
         if other.norm2() == 0:
             raise ValueError("cannot project onto zero vector")
         return other * (self.dot(other) / other.norm2())
+
+    def sample(self, radius, num):
+        """
+        以该点为圆心，XOZ平面采样一个圆
+        """
+        theta = np.linspace(0, 2 * np.pi, num)
+
+        x = self.x + radius * np.cos(theta)
+        y = np.full_like(theta, self.y)
+        z = self.z + radius * np.sin(theta)
+
+        pts = []
+        for i in range(num):
+            pts.append(OspPoint(x[i], y[i], z[i]))
+
+        return pts
 
     # =========================
     # numpy / OCCT 友好接口

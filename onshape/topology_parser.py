@@ -14,8 +14,17 @@ def parse_vert_dict(feature_topology):
     :param feature_topology:
     :return:
     """
-    vertices_topo_dict = {item['id']: OspPoint.from_list(item['param']) for item in feature_topology['vertices']}
-    return vertices_topo_dict
+    vertices_topo_dict = {}
+    vert_id_set = set()
+
+    for item in feature_topology['vertices']:
+        vert_id = item['id']
+
+        vert_id_set.add(vert_id)
+        vertices_topo_dict[vert_id] = OspPoint.from_list(item['param'])
+
+    # vertices_topo_dict = {item['id']: OspPoint.from_list(item['param']) for item in feature_topology['vertices']}
+    return vertices_topo_dict, vert_id_set
 
 
 def parse_edge_dict(feature_topology, vert_dict):
@@ -25,10 +34,10 @@ def parse_edge_dict(feature_topology, vert_dict):
     :param vert_dict:
     :return:
     """
-    edge_topo_list = feature_topology['edges']
+    vert_edge_dict = vert_dict
+    edge_id_set = set()
 
-    edge_dict = {}
-    for edge_topo_item in edge_topo_list:
+    for edge_topo_item in feature_topology['edges']:
         edge_id = edge_topo_item['id']
         edge_type = edge_topo_item['param']['curveType']
 
@@ -113,44 +122,54 @@ def parse_edge_dict(feature_topology, vert_dict):
         else:
             raise NotImplementedError(f'unsupported edge type: {edge_type}')
 
-        edge_dict[edge_id] = edge_parsed
+        edge_id_set.add(edge_id)
+        vert_edge_dict[edge_id] = edge_parsed
 
-    return edge_dict
+    return vert_edge_dict, edge_id_set
 
 
-def parse_face_dict(feature_topology, edge_dict):
+def parse_face_dict(feature_topology, vert_edge_dict):
     """
     将草图拓扑转化为区域
     :param feature_topology:
-    :param edge_dict:
+    :param vert_edge_dict:
     :return:
     """
     # 将原始的 topology 解析为区域
-    face_dict = {}
+    vert_edge_face_dict = vert_edge_dict
+    face_id_set = set()
+
     for face_topo_item in feature_topology['faces']:
-        face_edge_list = [edge_dict[edge_id] for edge_id in face_topo_item['edges']]
+        face_id = face_topo_item['id']
+
+        face_edge_list = [vert_edge_dict[edge_id] for edge_id in face_topo_item['edges']]
         face_parsed = OspFace(face_topo_item['approximateBSplineSurface'], face_edge_list, face_topo_item['id'])
 
-        face_dict[face_topo_item['id']] = face_parsed
+        vert_edge_face_dict[face_id] = face_parsed
+        face_id_set.add(face_id)
 
-    return face_dict
+    return vert_edge_face_dict, face_id_set
 
 
-def parse_body_dict(feature_topology, face_dict):
+def parse_body_dict(feature_topology, vert_edge_face_dict):
     """
     获取实体信息
     """
-    body_dict = {}
+    vert_edge_face_body_dict = vert_edge_face_dict
+    body_id_set = set()
+
     for body_topo_item in feature_topology['bodies']:
-        body_face_id_list = body_topo_item['faces']
-        if body_face_id_list:
+        face_id_list = body_topo_item['faces']
+        if face_id_list:
             body_id = body_topo_item['id']
-            bspline_face_list = [face_dict[face_id].bspline_face for face_id in body_face_id_list]
+            face_list = [vert_edge_face_dict[face_id] for face_id in face_id_list]
 
-            body_parsed = OspBody(bspline_face_list, body_id)
-            body_dict[body_id] = body_parsed
+            body_parsed = OspBody(face_list, body_id)
 
-    return body_dict
+            body_id_set.add(body_id)
+            vert_edge_face_body_dict[body_id] = body_parsed
+
+    return vert_edge_face_body_dict, body_id_set
 
 
 def parse_topo_dict(topo_parsed_all):
@@ -159,19 +178,18 @@ def parse_topo_dict(topo_parsed_all):
     通常需要将某个回滚状态下，全部建模特征构建的实体全部获取后，再调用该函数
     """
     # 获取全部角点
-    vert_dict = parse_vert_dict(topo_parsed_all)
+    vert_dict, vert_id_set = parse_vert_dict(topo_parsed_all)
 
     # 获取全部边
-    edge_dict = parse_edge_dict(topo_parsed_all, vert_dict)
+    vert_edge_dict, edge_id_set = parse_edge_dict(topo_parsed_all, vert_dict)
 
-    # 获取全部面
-    # 实测 Face 中包含 Region，因此这里不考虑 Region
-    face_dict = parse_face_dict(topo_parsed_all, edge_dict)
+    # 获取全部面。实测 Face 中包含 Region，因此这里不考虑 Region
+    vert_edge_face_dict, face_id_set = parse_face_dict(topo_parsed_all, vert_edge_dict)
 
     # 获取全部实体
-    body_dict = parse_body_dict(topo_parsed_all, face_dict)
+    vert_edge_face_body_dict, body_id_set = parse_body_dict(topo_parsed_all, vert_edge_face_dict)
 
-    return vert_dict, edge_dict, face_dict, body_dict
+    return vert_edge_face_body_dict, vert_id_set, edge_id_set, face_id_set, body_id_set
 
 
 def parse_edge_end_points_by_id(point_id_list: list[str], vertices_topo_dict: dict):

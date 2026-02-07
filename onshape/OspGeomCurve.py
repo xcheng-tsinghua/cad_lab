@@ -23,7 +23,7 @@ class OspLine(object):
         self.end_point = end_point
         self.id = topo_id
 
-    def sample(self, num=50, include_end=True):
+    def sample(self, num=50) -> list[OspPoint]:
         """
         在该线段上均匀采样一系列连续点
 
@@ -31,8 +31,6 @@ class OspLine(object):
         ----------
         num : int
             采样点数量（>=2）
-        include_end : bool
-            是否包含终点
 
         Returns
         -------
@@ -44,10 +42,7 @@ class OspLine(object):
         direction = self.end_point - self.start_point
 
         # 参数 t 的取值
-        if include_end:
-            ts = [i / (num - 1) for i in range(num)]
-        else:
-            ts = [i / num for i in range(num)]
+        ts = [i / (num - 1) for i in range(num)]
 
         points = []
         for t in ts:
@@ -77,7 +72,7 @@ class OspCircle(object):
         self.end_point = end_point
         self.id = topo_id
 
-    def sample(self, n_samples: int = 50):
+    def sample(self, n_samples: int = 50) -> list[OspPoint]:
         """
         在圆 / 圆弧上均匀采样点（角度等分），用于可视化
 
@@ -155,7 +150,7 @@ class OspEllipse(object):
         self.end_point = end_point
         self.id = topo_id
 
-    def sample(self, n_samples: int = 50):
+    def sample(self, n_samples: int = 50) -> list[OspPoint]:
         """
         在椭圆 / 椭圆弧上均匀采样点（按参数角度 θ 等分）
 
@@ -242,7 +237,7 @@ class OspBSpline(object):
         self.end_point = end_point
         self.id = topo_id
 
-    def sample(self, n_samples: int = 50):
+    def sample(self, n_samples: int = 50) -> list[OspPoint]:
         """
         在 B-Spline / NURBS 曲线上按参数均匀采样点（用于可视化）
 

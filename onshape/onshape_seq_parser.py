@@ -13,7 +13,7 @@ from onshape import topology_parser
 from onshape import on_utils
 import matplotlib.pyplot as plt
 from onshape import macro
-from onshape.OspGeomBase import point_list_to_numpy
+from onshape.OspGeomBase import point_list_to_numpy, OspPoint
 from onshape import OperationParser
 from colorama import Fore, Style
 
@@ -36,37 +36,52 @@ def plot_3d_sketch(sample_list):
     plt.show()
 
 
-def show_entity_ids(entity_ids, face_id_dict, edge_id_dict, vert_id_dict):
+def show_entity_ids(entity_ids, entities_all):
     """
     显示一组实体 id
     :param entity_ids:
-    :param face_id_dict:
-    :param edge_id_dict:
-    :param vert_id_dict:
+    :param entities_all:
     :return:
     """
     # 获取显示数据
     sample_points = []
     for entity_id in entity_ids:
-        # 是面的情况
-        if entity_id in face_id_dict:
-            face_entity = face_id_dict[entity_id]
-            for edge_entity in face_entity.edge_list:
-                sample_list = edge_entity.sample()
-                sample_points.append(point_list_to_numpy(sample_list))
 
-        elif entity_id in edge_id_dict:
-            prim = edge_id_dict[entity_id]
-            sample_list = prim.sample()
-            sample_points.append(point_list_to_numpy(sample_list))
+        entity = entities_all[entity_id]
+        entity_sample_list = entity.sample()
 
-        elif entity_id in vert_id_dict:
-            print('vertex entity not shown')
+        if isinstance(entity_sample_list[0], list):
+            sample_points.extend(entity_sample_list)
+
+        elif isinstance(entity_sample_list[0], OspPoint):
+            sample_points.append(entity_sample_list)
 
         else:
-            raise ValueError(f'required entity id: {entity_id} not in any topo dict.')
+            raise NotImplementedError
 
-    plot_3d_sketch(sample_points)
+    points_numpy = []
+    for item in sample_points:
+        points_numpy.append(point_list_to_numpy(item))
+
+        # # 是面的情况
+        # if entity_id in entities_all:
+        #     face_entity = entities_all[entity_id]
+        #     for edge_entity in face_entity.edge_list:
+        #         sample_list = edge_entity.sample()
+        #         sample_points.append(point_list_to_numpy(sample_list))
+        #
+        # elif entity_id in entities_all:
+        #     prim = entities_all[entity_id]
+        #     sample_list = prim.sample()
+        #     sample_points.append(point_list_to_numpy(sample_list))
+        #
+        # elif entity_id in entities_all:
+        #     print('vertex entity not shown')
+        #
+        # else:
+        #     raise ValueError(f'required entity id: {entity_id} not in any topo dict.')
+
+    plot_3d_sketch(points_numpy)
 
 
 def get_all_entity_ids(ofs, result=None):
@@ -254,7 +269,11 @@ def parse_onshape_topology(
     onshape_client = OnshapeClient()
 
     # 获取最初的操作特征列表
-    feat_ofs = onshape_client.request_features(model_url, is_load_ofs, os.path.join(save_root, 'feat_ofs.json'))
+    feat_ofs = onshape_client.request_features(
+        model_url,
+        is_load_ofs,
+        os.path.join(save_root, 'feat_ofs.json')
+    )
 
     all_feat_id, all_feat_type = get_feat_id(feat_ofs)
     print(f'number of all feat: {len(all_feat_id)}.')
@@ -263,7 +282,7 @@ def parse_onshape_topology(
     operation_cmd_list = get_operation_cmds(feat_ofs)
 
     # 获取全部拓扑
-    topo_parsed_all_step = []
+    entities_all = vert_ids_all = edge_ids_all = face_ids_all = body_ids_all = None
 
     request_feat_id = []
     for idx, (feat_id, feat_type, operation_cmd) in enumerate(zip(all_feat_id, all_feat_type, operation_cmd_list)):
@@ -280,7 +299,7 @@ def parse_onshape_topology(
             request_feat_id,
             roll_back_idx,
             is_load_topo,
-            os.path.join(save_root, f'operation_topo_rollback_{idx + 1}.json')
+            os.path.join(save_root, f'operation_topo_rollback_{roll_back_idx}.json')
         )
 
         # 单步获得的拓扑实体
@@ -296,13 +315,25 @@ def parse_onshape_topology(
             topo_parsed_step['edges'].extend(topo_parsed['edges'])
             topo_parsed_step['vertices'].extend(topo_parsed['vertices'])
 
-        # 解析全部依赖
-        vert_dict, edge_dict, face_dict, body_dict = topology_parser.parse_topo_dict(topo_parsed_step)
-        topo_parsed_all_step.append({'vert_dict': vert_dict,
-                                     'edge_dict': edge_dict,
-                                     'face_dict': face_dict,
-                                     'body_dict': body_dict}
-                                    )
+        # 解析本次获取的全部实体
+        entities, vert_ids, edge_ids, face_ids, body_ids = topology_parser.parse_topo_dict(topo_parsed_step)
+
+        # 解析到的拓扑实体需要合并前一步的拓扑实体，因为本次使用的拓扑实体可能是前面的建模步骤创建的
+        # 如果解析到前面已解析的拓扑实体，本次依赖的拓扑实体以新的为准
+        if idx == 0:
+            entities_all = entities
+            vert_ids_all = vert_ids
+            edge_ids_all = edge_ids
+            face_ids_all = face_ids
+            body_ids_all = body_ids
+
+        else:
+            entities_all.update(entities)
+            vert_ids_all.update(vert_ids)
+            edge_ids_all.update(edge_ids)
+            face_ids_all.update(face_ids)
+            body_ids_all.update(body_ids)
+
         # 显示实体
         if feat_type in ('extrude', 'revolve', 'sweep', 'loft',
                          'fillet', 'chamfer',
@@ -310,16 +341,16 @@ def parse_onshape_topology(
                          'draft', 'rib', 'mirror'
                          ):
             # 校验是否有操作需要但是未获取到的 id
-            parsed_entity_id_step = extract_entity_ids(entity_topo)
-            not_parsed = in_a_not_in_b(operation_cmd.required_geo, parsed_entity_id_step)
+            not_parsed = in_a_not_in_b(operation_cmd.required_geo, list(entities_all.keys()))
             if not_parsed:
-                print(Fore.RED + f'not parsed entity ids: {not_parsed}' + Style.RESET_ALL)
+                print(Fore.RED + f'not parsed entity ids: {not_parsed} / {roll_back_idx} / {feat_type}' + Style.RESET_ALL)
+                raise ValueError
             else:
                 print(Fore.GREEN + f'all required entity ids are already parsed' + Style.RESET_ALL)
-                show_entity_ids(operation_cmd.required_geo, face_dict, edge_dict, vert_dict)
+                show_entity_ids(operation_cmd.required_geo, entities_all)
 
-            for _, osp_body in body_dict.items():
-                osp_body.show()
+            # for _, osp_body in body_dict.items():
+            #     osp_body.show()
 
 
     # # 获取未获取但需要的实体 id
